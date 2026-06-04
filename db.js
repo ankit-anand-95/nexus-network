@@ -222,9 +222,7 @@ const tables = [
   UNIQUE(job_id, applicant_id),
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
   FOREIGN KEY (applicant_id) REFERENCES users(id) ON DELETE CASCADE
-)`
-];
-
+)`,
 `CREATE TABLE IF NOT EXISTS password_resets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL UNIQUE,
