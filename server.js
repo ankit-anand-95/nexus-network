@@ -780,6 +780,17 @@ db.prepare(`UPDATE jobs SET applications_count=applications_count+1 WHERE id=?`)
 });
 
 
+
+app.post('/api/auth/reset-by-email', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password || password.length < 6) return res.status(400).json({ error: 'Email and password (min 6 chars) required' });
+  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+  if (!user) return res.status(400).json({ error: 'No account found with that email' });
+  const hash = await bcrypt.hash(password, 10);
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
+  res.json({ ok: true });
+});
+
 // ─── FORGOT / RESET PASSWORD ─────────────────────────────────────────────────
 
 app.post('/api/auth/forgot-password', async (req, res) => {

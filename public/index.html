@@ -421,10 +421,12 @@ function renderAF(m, resetToken) {
   if (m === 'forgot') {
     document.getElementById('aform').innerHTML = `
       <h2 style="margin-bottom:4px">Reset password</h2>
-      <p style="color:var(--sub);font-size:13px;margin-bottom:20px">Enter your email and we'll send a reset link</p>
+      <p style="color:var(--sub);font-size:13px;margin-bottom:20px">Enter your email and choose a new password</p>
       <div class="fg"><label>Email</label><input id="fe" type="email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="fg"><label>New Password</label><input id="fp1" type="password" placeholder="Min 6 characters"></div>
+      <div class="fg"><label>Confirm Password</label><input id="fp2" type="password" placeholder="Repeat password" onkeydown="if(event.key==='Enter')doForgot()"></div>
       <div id="aerr"></div>
-      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doForgot()"><i class="fas fa-paper-plane"></i> Send Reset Link</button>
+      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doForgot()"><i class="fas fa-lock"></i> Set New Password</button>
       <p style="text-align:center;margin-top:12px;font-size:13px"><a href="#" onclick="renderAF('login')" style="color:var(--sub)">← Back to sign in</a></p>`;
     return;
   }
@@ -480,23 +482,19 @@ async function doAuth(m) {
 // ── FORGOT / RESET PASSWORD ──────────────────────────────────────────────────
 async function doForgot() {
   const email = document.getElementById('fe')?.value.trim();
+  const p1 = document.getElementById('fp1')?.value;
+  const p2 = document.getElementById('fp2')?.value;
   const el = document.getElementById('aerr'); el.innerHTML = '';
   if (!email) { el.innerHTML = '<p style="color:#ef4444;font-size:13px">Email required</p>'; return; }
+  if (!p1 || p1.length < 6) { el.innerHTML = '<p style="color:#ef4444;font-size:13px">Password must be at least 6 characters</p>'; return; }
+  if (p1 !== p2) { el.innerHTML = '<p style="color:#ef4444;font-size:13px">Passwords do not match</p>'; return; }
   const btn = document.querySelector('#aform .btn-p');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sending…'; }
-  const r = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Reset Link'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Updating…'; }
+  const r = await api('/api/auth/reset-by-email', { method: 'POST', body: JSON.stringify({ email, password: p1 }) });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Set New Password'; }
   if (r.error) { el.innerHTML = `<p style="color:#ef4444;font-size:13px">${r.error}</p>`; return; }
-  // Dev mode: show link directly
-  if (r.dev_reset_url) {
-    el.innerHTML = `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;font-size:13px">
-      <p style="color:#16a34a;font-weight:700;margin:0 0 8px">✓ Reset link ready</p>
-      <p style="color:#374151;margin:0 0 10px">Email delivery is not configured. Click the button below to reset your password:</p>
-      <a href="${r.dev_reset_url}" class="btn btn-p btn-sm" style="display:inline-flex"><i class="fas fa-lock-open"></i> Reset My Password</a>
-    </div>`;
-    return;
-  }
-  el.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ ${r.message || 'Check your email for the reset link.'}</p>`;
+  el.innerHTML = '<p style="color:#22c55e;font-size:13px">✓ Password updated! Signing you in…</p>';
+  setTimeout(() => renderAF('login'), 1500);
 }
 
 async function doReset(token) {
