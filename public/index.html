@@ -410,10 +410,15 @@ function initSocket() {
         refreshThreads();
       }
     } else {
-      // Not on this chat — badge + toast
-      updBadge('mbadge', 1);
-      if (m.sender_name) toast(`💬 ${m.sender_name}: ${(m.content||'').substring(0,60)}`);
-      if (curPage === 'messaging') refreshThreads(); // update thread list unread dot
+      // Not on this specific chat
+      if (curPage !== 'messaging') {
+        // User is on a different page entirely — show badge + toast
+        updBadge('mbadge', 1);
+        if (m.sender_name) toast(`💬 ${m.sender_name}: ${(m.content||'').substring(0,60)}`);
+      } else {
+        // User is on messaging page but different chat open — just update thread list, no badge
+        refreshThreads();
+      }
     }
   });
 
@@ -1024,6 +1029,8 @@ async function actConn(id, action, btn) {
 // ── MESSAGING ─────────────────────────────────────────────────────────────
 let achat = null;
 async function renderMessaging(pre) {
+  // Clear message badge immediately — user is on the chat page
+  updBadge('mbadge', 0);
   const pr = document.getElementById('pr');
   pr.style.cssText = 'padding:60px 0 0;max-width:100%;box-sizing:border-box';
   pr.innerHTML = `<div id="mlay"><div class="mlist"><div class="mhdr">Messages <button class="btn btn-p btn-sm" style="margin-left:auto;padding:4px 10px" onclick="showNewMsg()" title="New message"><i class="fas fa-edit"></i></button></div><div id="ml"><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div></div><div id="ccol"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--sub);text-align:center;padding:20px"><i class="fas fa-comment-dots" style="font-size:56px;opacity:.2;margin-bottom:16px"></i><p style="font-size:16px;font-weight:700;margin-bottom:8px">Your Messages</p><p style="font-size:13px">Select a conversation or click ✏️ to start one</p></div></div></div>`;
@@ -1047,6 +1054,7 @@ async function openChat(uid, name) {
   document.querySelectorAll('.mthread').forEach(e => e.classList.remove('active'));
   document.getElementById('mt-' + uid)?.classList.add('active');
   if (socket) { socket.emit('join_chat', uid); socket.emit('mark_read', { from: uid }); }
+  updBadge('mbadge', 0); // clear badge when opening any conversation
   const [info, msgs] = await Promise.all([
     api('/api/users/' + uid).catch(() => ({ name: name || 'User' })),
     api('/api/messages/' + uid)
