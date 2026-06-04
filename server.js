@@ -380,7 +380,11 @@ app.post('/api/posts', auth, (req, res) => {
   }
   // Return the full post so frontend can render it immediately
   const newPost = db.prepare(`
-    SELECT p.*, u.name as author_name, u.avatar_url as author_avatar, u.headline as author_headline,
+    SELECT p.*,
+      CASE WHEN p.is_anonymous=1 THEN 'Anonymous' ELSE u.name END as author_name,
+      CASE WHEN p.is_anonymous=1 THEN NULL ELSE u.avatar_url END as author_avatar,
+      CASE WHEN p.is_anonymous=1 THEN NULL ELSE u.headline END as author_headline,
+      CASE WHEN p.is_anonymous=1 THEN NULL ELSE u.id END as author_id,
       0 as liked, 0 as likes_count, 0 as comments_count
     FROM posts p LEFT JOIN users u ON p.author_id = u.id
     WHERE p.id = ?

@@ -153,7 +153,7 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .sug-card p{font-size:12px;color:var(--sub);margin:0 0 12px;line-height:1.4;min-height:32px}
 
 /* MESSAGING */
-#mlay{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 60px);background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden}
+#mlay{display:grid;grid-template-columns:320px 1fr;grid-template-rows:1fr;height:calc(100vh - 60px);background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden}
 .mlist{border-right:1px solid var(--border);display:flex;flex-direction:column}
 .mhdr{padding:16px 20px;font-weight:800;font-size:16px;border-bottom:1px solid var(--border);display:flex;align-items:center}
 #ml{flex:1;overflow-y:auto}
@@ -163,7 +163,7 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .mthread .mi h5{font-size:13px;font-weight:700;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mthread .mi p{font-size:12px;color:var(--sub);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .udot{width:10px;height:10px;border-radius:50%;background:var(--primary);flex-shrink:0}
-#ccol{display:flex;flex-direction:column;height:100%}
+#ccol{display:flex;flex-direction:column;height:100%;min-height:0;align-self:stretch}
 #ctop{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
 #ctop h3{font-size:15px;font-weight:700;margin:0}
 #ctop p{font-size:12px;color:var(--sub);margin:0}
@@ -709,7 +709,7 @@ function renderPost(p) {
   }
   const isLiked = p.liked || p.user_liked;
   return `<div class="card post" id="pc-${p.id}">
-    <div class="post-hdr">${av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name || 'Nexus Member'}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<button onclick="delPost(${p.id})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}</div>
+    <div class="post-hdr">${p.is_anonymous ? `<div class="av av40" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;border-radius:50%">?</div>` : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name || 'Nexus Member'}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<button onclick="delPost(${p.id})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}</div>
     <div class="post-body">${p.content}</div>
     ${p.image_url ? `<img src="${p.image_url}" class="post-img" loading="lazy">` : ''}
     ${pollHtml}
