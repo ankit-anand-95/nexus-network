@@ -239,6 +239,7 @@ tables.forEach(sql => db.exec(sql));
 const migrations = [
   `ALTER TABLE expert_profiles ADD COLUMN meeting_link TEXT DEFAULT ''`,
   `ALTER TABLE expert_profiles ADD COLUMN availability_slots TEXT DEFAULT '[]'`,
+  `ALTER TABLE messages ADD COLUMN is_edited INTEGER DEFAULT 0`,
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 

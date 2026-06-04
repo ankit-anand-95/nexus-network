@@ -193,6 +193,16 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 #cinp input:focus{outline:none;border-color:var(--primary)}
 #cinp button{width:42px;height:42px;border-radius:50%;flex-shrink:0}
 
+/* DATETIME INPUT — fix dark mode calendar icon visibility */
+input[type="datetime-local"]{color-scheme:dark}
+body:not(.dark) input[type="datetime-local"]{color-scheme:light}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(0.6);cursor:pointer;padding:2px}
+body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(0.8) brightness(1.5)}
+/* Editable bubble */
+.bub.mine:hover .edit-msg-btn{opacity:1}
+.edit-msg-btn{opacity:0;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:11px;padding:2px 4px;transition:opacity .15s;margin-left:4px}
+.edit-msg-btn:hover{color:#fff}
+
 /* AVATAR */
 .av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
 .av40{width:40px;height:40px;font-size:16px}
@@ -488,6 +498,32 @@ function initSocket() {
     const card = document.getElementById('pc-' + postId); if (!card) return;
     const btns = card.querySelectorAll('.pact');
     if (btns[1]) btns[1].innerHTML = `<i class="far fa-comment"></i> ${comments_count}`;
+  });
+
+  socket.on('post_edited', ({ postId, content }) => {
+    const body = document.querySelector('#pc-' + postId + ' .post-body');
+    if (body) body.textContent = content;
+  });
+
+  socket.on('message_edited', ({ id, content }) => {
+    const bub = document.querySelector('[data-mid="' + id + '"]');
+    if (bub) {
+      const textNode = bub.firstChild;
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) textNode.textContent = content;
+      else { const foot = bub.querySelector('.bub-foot'); if (foot) bub.insertBefore(document.createTextNode(content), foot); }
+      const ed = bub.querySelector('.edited-label');
+      if (!ed) { const foot = bub.querySelector('.bub-foot'); if (foot) { const s = document.createElement('span'); s.className = 'edited-label'; s.style.cssText='font-size:10px;opacity:.5;margin-right:4px'; s.textContent='edited'; foot.prepend(s); } }
+    }
+  });
+
+  socket.on('mentor_slot_booked', ({ expertId, slots }) => {
+    // Update slot count on mentor card in real-time (if Mentors page is open)
+    const card = document.querySelector(`[data-expert="${expertId}"]`);
+    if (!card) return;
+    const free = slots.filter(s => !s.booked).length;
+    const total = slots.length;
+    const el = card.querySelector('.slot-count');
+    if (el) { el.textContent = `${free} of ${total} slots available`; el.style.color = free ? '#22c55e' : '#ef4444'; }
   });
 
   socket.on('poll_voted', ({ postId, options }) => {
@@ -833,7 +869,7 @@ function renderPost(p) {
   }
   const isLiked = p.liked || p.user_liked;
   return `<div class="card post" id="pc-${p.id}">
-    <div class="post-hdr">${p.is_anonymous ? `<div class="av av40" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;border-radius:50%">?</div>` : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name || 'Nexus Member'}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<button onclick="delPost(${p.id})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}</div>
+    <div class="post-hdr">${p.is_anonymous ? `<div class="av av40" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;border-radius:50%">?</div>` : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name || 'Nexus Member'}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<div style="margin-left:auto;display:flex;gap:4px"><button onclick="editPost(${p.id},'${(p.content||'').replace(/'/g,'&apos;').replace(/\n/g,'\\n')}')" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delPost(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Delete"><i class="fas fa-trash"></i></button></div>` : ''}</div>
     <div class="post-body">${p.content}</div>
     ${p.image_url ? `<img src="${p.image_url}" class="post-img" loading="lazy">` : ''}
     ${pollHtml}
@@ -904,6 +940,28 @@ async function delPost(id) {
   </div>`);
 }
 async function _doDelPost(id) { await api('/api/posts/' + id, { method: 'DELETE' }); document.getElementById('pc-' + id)?.remove(); toast('Post deleted'); }
+function editPost(id, currentContent) {
+  const content = currentContent.replace(/\\n/g, '\n');
+  showModal(`<h2 style="margin-bottom:16px">Edit Post</h2>
+    <textarea id="edit-post-txt" rows="5" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:14px;resize:vertical;box-sizing:border-box">${escHtml(content)}</textarea>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-o" style="flex:1" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-p" style="flex:1" onclick="_doEditPost(${id})"><i class="fas fa-check"></i> Save</button>
+    </div>`);
+  // Focus end of textarea
+  setTimeout(() => { const t = document.getElementById('edit-post-txt'); if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length);} }, 50);
+}
+async function _doEditPost(id) {
+  const txt = document.getElementById('edit-post-txt')?.value?.trim();
+  if (!txt) { toast('Post cannot be empty'); return; }
+  const r = await api('/api/posts/' + id, { method: 'PATCH', body: JSON.stringify({ content: txt }) });
+  if (r.error) { toast(r.error); return; }
+  closeModal();
+  // Update DOM immediately
+  const body = document.querySelector('#pc-' + id + ' .post-body');
+  if (body) body.textContent = txt;
+  toast('Post updated');
+}
 function sharePost(id) { const url = window.location.origin + '?post=' + id; navigator.clipboard?.writeText(url).then(() => toast('Link copied!')).catch(() => toast('Share: ' + url)); }
 
 // ── PROFILE ───────────────────────────────────────────────────────────────
@@ -1068,7 +1126,10 @@ async function openChat(uid, name) {
       <div><h3>${escHtml(info.name||name)}</h3><p id="ctop-sub" data-hl="${escHtml(hl)}">${isOnline?'Active now':hl}</p></div>
       <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button>
     </div>
-    <div id="cmsgs">${(Array.isArray(msgs)?msgs:[]).map(m=>`<div class="bub ${m.sender_id==me.id?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot"><time>${timeAgo(m.created_at)}</time>${m.sender_id==me.id?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`).join('')}</div>
+    <div id="cmsgs">${(Array.isArray(msgs)?msgs:[]).map(m=>{
+      const isMine = m.sender_id==me.id;
+      return `<div class="bub ${isMine?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot">${isMine?`<button class="edit-msg-btn" onclick="editMsg(${m.id},this)" title="Edit"><i class="fas fa-pen"></i></button>`:''}${m.is_edited?'<span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span>':''}<time>${timeAgo(m.created_at)}</time>${isMine?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`;
+    }).join('')}</div>
     <div id="typind"><div class="tdots"><span></span><span></span><span></span></div><span id="tname">${escHtml(info.name||name)}</span> is typing…</div>
     <div id="cinp"><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
@@ -1109,6 +1170,29 @@ async function sendMsg() {
     toast('Failed to send'); inp.value = c;
   }
   refreshThreads();
+}
+
+function editMsg(id, btn) {
+  const bub = btn.closest('.bub'); if (!bub) return;
+  const currentText = bub.firstChild?.textContent?.trim() || '';
+  // Replace bubble content with inline editor
+  bub.innerHTML = `<div style="display:flex;gap:6px;align-items:center">
+    <input id="edit-msg-inp-${id}" value="${escHtml(currentText)}" style="flex:1;padding:6px 10px;border:1.5px solid rgba(255,255,255,.4);border-radius:8px;background:rgba(255,255,255,.15);color:#fff;font-size:13px" onkeydown="if(event.key==='Enter')_saveMsg(${id});if(event.key==='Escape')openChat(achat)">
+    <button onclick="_saveMsg(${id})" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;padding:5px 10px;cursor:pointer;color:#fff;font-size:12px"><i class="fas fa-check"></i></button>
+    <button onclick="openChat(achat)" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px"><i class="fas fa-times"></i></button>
+  </div>`;
+  document.getElementById('edit-msg-inp-' + id)?.focus();
+}
+async function _saveMsg(id) {
+  const inp = document.getElementById('edit-msg-inp-' + id);
+  const val = inp?.value?.trim(); if (!val) return;
+  const r = await api('/api/messages/' + id, { method: 'PATCH', body: JSON.stringify({ content: val }) });
+  if (r.error) { toast(r.error); return; }
+  // Socket will update both sides; update own bubble immediately too
+  const bub = document.querySelector('[data-mid="' + id + '"]');
+  if (bub) {
+    bub.innerHTML = `${escHtml(val)}<div class="bub-foot"><button class="edit-msg-btn" onclick="editMsg(${id},this)" title="Edit"><i class="fas fa-pen"></i></button><span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span><time>just now</time><span class="tick sent"><i class="fas fa-check"></i></span></div>`;
+  }
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
@@ -1167,21 +1251,21 @@ async function saveRev() {
 // ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
 async function renderExperts() {
   const d = await api('/api/experts');
-  const cards = Array.isArray(d) && d.length ? d.map(e => {
+  const cards = Array.isArray(d) && d.length ? d.filter(e => e.user_id != me?.id).map(e => {
     const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || '');
     const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
     const freeSlots = slots.filter(s => !s.booked).length;
     const totalSlots = slots.length;
-    return `<div class="card" style="padding:20px;text-align:center">
+    return `<div class="card" style="padding:20px;text-align:center" data-expert="${e.user_id}">
       ${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}
       <h4 style="margin:10px 0 2px;font-size:15px">${escHtml(e.name || 'Mentor')}</h4>
       <p style="font-size:12px;color:var(--sub);margin:0 0 6px">${escHtml(e.headline || '')}</p>
       <p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 4px">${escHtml(expertiseStr)}</p>
       <p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 4px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub);font-size:12px">/session</span></p>
-      ${totalSlots ? `<p style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
+      ${totalSlots ? `<p class="slot-count" style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p class="slot-count" style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
       <button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name||'Mentor')}')"><i class="fas fa-video"></i> Book Session</button>
     </div>`;
-  }).join('') : '<div class="card empty" style="text-align:center;padding:40px"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No mentors yet — be the first to offer!</p></div>';
+  }).join('') : '<div class="card empty" style="text-align:center;padding:40px"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No other mentors yet</p></div>';
   document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
     <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
     <div class="sug-grid">${cards}</div>

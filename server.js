@@ -403,6 +403,15 @@ app.delete('/api/posts/:id', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/posts/:id', auth, (req, res) => {
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+  const r = db.prepare(`UPDATE posts SET content=? WHERE id=? AND author_id=?`).run(content.trim(), req.params.id, req.user.id);
+  if (!r.changes) return res.status(403).json({ error: 'Not found or not yours' });
+  io.emit('post_edited', { postId: Number(req.params.id), content: content.trim() });
+  res.json({ ok: true });
+});
+
 // Like toggle — accepts both POST and DELETE from client
 function toggleLike(req, res) {
   const postId = req.params.id;
@@ -591,6 +600,19 @@ app.post('/api/messages/:userId', auth, (req, res) => {
   res.json(msg);
 });
 
+app.patch('/api/messages/:id', auth, (req, res) => {
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+  const msg = db.prepare(`SELECT * FROM messages WHERE id=? AND sender_id=?`).get(req.params.id, req.user.id);
+  if (!msg) return res.status(403).json({ error: 'Not found or not yours' });
+  db.prepare(`UPDATE messages SET content=?, is_edited=1 WHERE id=?`).run(content.trim(), req.params.id);
+  // Broadcast edit to both sides
+  const room = [msg.sender_id, msg.receiver_id].sort().join('-');
+  io.to(room).emit('message_edited', { id: Number(req.params.id), content: content.trim() });
+  io.to(`user_${msg.receiver_id}`).emit('message_edited', { id: Number(req.params.id), content: content.trim() });
+  res.json({ ok: true });
+});
+
 // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
 
 app.get('/api/notifications', auth, (req, res) => {
@@ -732,7 +754,12 @@ app.post('/api/experts/:expertId/book-slot', auth, (req, res) => {
   slot.booked = true; slot.booked_by = req.user.id;
   db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), req.params.expertId);
   const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  createNotif(parseInt(req.params.expertId), req.user.id, 'session_booked', 0, `${actor.name} booked a session with you on ${slotKey}`);
+  const readableSlot = new Date(slotKey).toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  createNotif(parseInt(req.params.expertId), req.user.id, 'session_booked', 0, `${actor.name} booked a session with you on ${readableSlot}`);
+  // Real-time: update slot count on all clients
+  const freshRow = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(req.params.expertId);
+  const freshSlots = JSON.parse(freshRow?.availability_slots || '[]');
+  io.emit('mentor_slot_booked', { expertId: Number(req.params.expertId), slots: freshSlots });
   res.json({ ok: true, meeting_link: expert.meeting_link });
 });
 
@@ -883,7 +910,8 @@ io.on('connection', socket => {
       partners.forEach(({ partner_id }) => io.to(`user_${partner_id}`).emit('user_online', { userId: id }));
 
       // Send current online list to this socket (only users they have chats with)
-      const onlineNow = partners.map(p => p.partner_id).filter(pid => onlineUsers.has(pid) && onlineUsers.get(pid).size > 0);      socket.emit('online_users', onlineNow);
+      const onlineNow = partners.map(p => p.partner_id).filter(pid => onlineUsers.has(pid) && onlineUsers.get(pid).size > 0);
+      socket.emit('online_users', onlineNow);
     } catch {}
   });
 
