@@ -365,7 +365,7 @@ function logout() {
   localStorage.removeItem('nxdark');
   token = ''; me = null;
   if (socket) { socket.disconnect(); socket = null; }
-  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer);
+  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
   document.body.classList.remove('dark');
   document.getElementById('appw').style.display = 'none';
   showAuth('login');
@@ -422,9 +422,9 @@ function renderAF(m, resetToken) {
     document.getElementById('aform').innerHTML = `
       <h2 style="margin-bottom:4px">Reset password</h2>
       <p style="color:var(--sub);font-size:13px;margin-bottom:20px">Enter your email and choose a new password</p>
-      <div class="fg"><label>Email</label><input id="fe" type="email" placeholder="you@example.com" autocomplete="email"></div>
-      <div class="fg"><label>New Password</label><input id="fp1" type="password" placeholder="Min 6 characters"></div>
-      <div class="fg"><label>Confirm Password</label><input id="fp2" type="password" placeholder="Repeat password" onkeydown="if(event.key==='Enter')doForgot()"></div>
+      <div class="fg"><label>Email</label><input id="fe" type="email" placeholder="you@example.com" autocomplete="off"></div>
+      <div class="fg"><label>New Password</label><div style="position:relative"><input id="fp1" type="password" placeholder="Min 6 characters" autocomplete="new-password" style="width:100%;padding-right:40px;box-sizing:border-box"><button type="button" onclick="togglePw('fp1',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--sub)"><i class="fas fa-eye"></i></button></div></div>
+      <div class="fg"><label>Confirm Password</label><div style="position:relative"><input id="fp2" type="password" placeholder="Repeat password" autocomplete="new-password" style="width:100%;padding-right:40px;box-sizing:border-box" onkeydown="if(event.key==='Enter')doForgot()"><button type="button" onclick="togglePw('fp2',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--sub)"><i class="fas fa-eye"></i></button></div></div>
       <div id="aerr"></div>
       <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doForgot()"><i class="fas fa-lock"></i> Set New Password</button>
       <p style="text-align:center;margin-top:12px;font-size:13px"><a href="#" onclick="renderAF('login')" style="color:var(--sub)">← Back to sign in</a></p>`;
@@ -566,7 +566,7 @@ async function renderHome() {
     obs.observe(sentinel);
   }
   // Auto-check for new posts every 45 seconds
-  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer);
+  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
   window._feedPollTimer = setInterval(checkNewPosts, 45000);
 }
 
@@ -962,6 +962,19 @@ async function openChat(uid, name) {
     });
     socket.off('typing'); socket.on('typing', ({ from }) => { if (from == uid) { const ti = document.getElementById('typind'); if (ti) { ti.style.display = 'block'; clearTimeout(window._tt); window._tt = setTimeout(() => ti.style.display = 'none', 2000); } } });
   }
+  // Polling fallback: catch any socket-missed messages every 8s
+  clearInterval(window._chatPollTimer);
+  window._chatPollTimer = setInterval(async () => {
+    if (achat !== uid || curPage !== 'messaging') { clearInterval(window._chatPollTimer); return; }
+    const msgs = await api('/api/messages/' + uid);
+    const mb = document.getElementById('cmsgs'); if (!mb) return;
+    (Array.isArray(msgs) ? msgs : []).forEach(m => {
+      if (!mb.querySelector('[data-mid="' + m.id + '"]')) {
+        mb.innerHTML += `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`;
+        mb.scrollTop = mb.scrollHeight;
+      }
+    });
+  }, 8000);
 }
 function emitTyp() { if (socket && achat) socket.emit('typing', { to: achat }); }
 async function sendMsg() {
