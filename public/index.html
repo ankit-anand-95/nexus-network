@@ -353,7 +353,27 @@ function showAuth(m = 'login') {
   document.getElementById('appw').style.display = 'none';
   renderAF(m);
 }
-function renderAF(m) {
+function renderAF(m, resetToken) {
+  if (m === 'forgot') {
+    document.getElementById('aform').innerHTML = `
+      <h2 style="margin-bottom:4px">Reset password</h2>
+      <p style="color:var(--sub);font-size:13px;margin-bottom:20px">Enter your email and we'll send a reset link</p>
+      <div class="fg"><label>Email</label><input id="fe" type="email" placeholder="you@example.com" autocomplete="email"></div>
+      <div id="aerr"></div>
+      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doForgot()"><i class="fas fa-paper-plane"></i> Send Reset Link</button>
+      <p style="text-align:center;margin-top:12px;font-size:13px"><a href="#" onclick="renderAF('login')" style="color:var(--sub)">← Back to sign in</a></p>`;
+    return;
+  }
+  if (m === 'reset') {
+    document.getElementById('aform').innerHTML = `
+      <h2 style="margin-bottom:4px">Set new password</h2>
+      <p style="color:var(--sub);font-size:13px;margin-bottom:20px">Choose a strong password for your account</p>
+      <div class="fg"><label>New Password</label><input id="rp1" type="password" placeholder="Min 6 characters"></div>
+      <div class="fg"><label>Confirm Password</label><input id="rp2" type="password" placeholder="Repeat password"></div>
+      <div id="aerr"></div>
+      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doReset('${resetToken}')"><i class="fas fa-lock"></i> Set New Password</button>`;
+    return;
+  }
   const il = m === 'login';
   document.getElementById('aform').innerHTML = `
     <h2>${il ? 'Welcome back' : 'Join Nexus'}</h2>
@@ -382,6 +402,36 @@ async function doAuth(m) {
   document.getElementById('awrap').style.display = 'none';
   document.getElementById('appw').style.display = 'flex';
   initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+}
+
+// ── FORGOT / RESET PASSWORD ──────────────────────────────────────────────────
+async function doForgot() {
+  const email = document.getElementById('fe')?.value.trim();
+  const el = document.getElementById('aerr'); el.innerHTML = '';
+  if (!email) { el.innerHTML = '<p style="color:#ef4444;font-size:13px">Email required</p>'; return; }
+  const btn = document.querySelector('#aform .btn-p');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sending…'; }
+  const r = await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Reset Link'; }
+  if (r.error) { el.innerHTML = `<p style="color:#ef4444;font-size:13px">${r.error}</p>`; return; }
+  // Dev mode: show link directly
+  if (r.dev_reset_url) {
+    el.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ Dev mode — <a href="${r.dev_reset_url}" style="color:var(--primary)">click here to reset</a></p>`;
+    return;
+  }
+  el.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ ${r.message}</p>`;
+}
+
+async function doReset(token) {
+  const p1 = document.getElementById('rp1')?.value;
+  const p2 = document.getElementById('rp2')?.value;
+  const el = document.getElementById('aerr'); el.innerHTML = '';
+  if (!p1 || p1.length < 6) { el.innerHTML = '<p style="color:#ef4444;font-size:13px">Min 6 characters</p>'; return; }
+  if (p1 !== p2) { el.innerHTML = '<p style="color:#ef4444;font-size:13px">Passwords do not match</p>'; return; }
+  const r = await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password: p1 }) });
+  if (r.error) { el.innerHTML = `<p style="color:#ef4444;font-size:13px">${r.error}</p>`; return; }
+  el.innerHTML = '<p style="color:#22c55e;font-size:13px">✓ Password updated! Signing you in…</p>';
+  setTimeout(() => renderAF('login'), 1500);
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────────
@@ -440,6 +490,31 @@ async function renderHome() {
     }, { rootMargin: '200px' });
     obs.observe(sentinel);
   }
+  // Auto-check for new posts every 45 seconds
+  clearInterval(window._feedPollTimer);
+  window._feedPollTimer = setInterval(checkNewPosts, 45000);
+}
+
+let _feedLastTs = null; // ISO timestamp of newest post in feed
+
+async function checkNewPosts() {
+  if (curPage !== 'home' || !_feedLastTs) return;
+  const r = await api('/api/posts/new-count?since=' + encodeURIComponent(_feedLastTs)).catch(() => ({}));
+  if ((r.count || 0) > 0) {
+    // Show a clickable banner at top of feed
+    const existing = document.getElementById('new-posts-banner');
+    if (!existing) {
+      const banner = document.createElement('div');
+      banner.id = 'new-posts-banner';
+      banner.style.cssText = 'background:var(--primary);color:#fff;text-align:center;padding:10px;cursor:pointer;border-radius:var(--r);margin-bottom:10px;font-size:13px;font-weight:600;animation:fadeIn .3s';
+      banner.innerHTML = `<i class="fas fa-arrow-up"></i> ${r.count} new post${r.count > 1 ? 's' : ''} — click to refresh`;
+      banner.onclick = () => { banner.remove(); _feedPage = 1; _feedDone = false; _feedLastTs = null; loadMorePosts(); };
+      const feed = document.getElementById('feed');
+      if (feed) feed.parentNode.insertBefore(banner, feed);
+    } else {
+      existing.innerHTML = `<i class="fas fa-arrow-up"></i> ${r.count} new post${r.count > 1 ? 's' : ''} — click to refresh`;
+    }
+  }
 }
 
 async function loadMorePosts() {
@@ -458,6 +533,10 @@ async function loadMorePosts() {
   }
   postsData = _feedPage === 1 ? posts : [...postsData, ...posts];
   _feedPage++;
+  // Track newest post timestamp for auto-refresh
+  if (posts.length && (_feedPage === 2 || !_feedLastTs)) {
+    _feedLastTs = posts[0].created_at;
+  }
   const feed = document.getElementById('feed');
   if (feed) {
     if (_feedPage === 2) feed.innerHTML = posts.map(renderPost).join('');
@@ -876,6 +955,21 @@ async function saveJob() {
 (async () => {
   // Restore dark mode immediately from localStorage (prevents flash)
   if (localStorage.getItem('nxdark') === '1') document.body.classList.add('dark');
+  // Handle password reset link (?reset=TOKEN)
+  const resetToken = new URLSearchParams(window.location.search).get('reset');
+  if (resetToken) {
+    const check = await api('/api/auth/reset-password/' + resetToken);
+    document.getElementById('awrap').style.display = 'flex';
+    document.getElementById('appw').style.display = 'none';
+    if (check.valid) {
+      renderAF('reset', resetToken);
+    } else {
+      renderAF('login');
+      document.getElementById('aerr').innerHTML = '<p style="color:#ef4444;font-size:13px">Reset link expired. Request a new one.</p>';
+    }
+    history.replaceState({}, '', '/'); // clean URL
+    return;
+  }
   const saved = localStorage.getItem('nxtoken');
   if (saved) {
     token = saved;

@@ -10,6 +10,8 @@ const fs = require('fs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const validator = require('validator');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 const db = require('./db');
 
 const app = express();
@@ -18,6 +20,32 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'nexus_dev_secret_change_in_prod';
 const PORT = process.env.PORT || 3000;
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+
+// Email transporter — configure SMTP_* env vars to enable real emails
+// Works with Gmail, Resend, SendGrid SMTP, Mailgun, etc.
+let mailer = null;
+if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  mailer = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
+}
+async function sendEmail(to, subject, html) {
+  if (!mailer) {
+    console.log(`[EMAIL] To: ${to} | Subject: ${subject}`);
+    return false; // email not configured
+  }
+  try {
+    await mailer.sendMail({
+      from: process.env.SMTP_FROM || `Nexus <${process.env.SMTP_USER}>`,
+      to, subject, html
+    });
+    return true;
+  } catch(e) { console.error('Email error:', e.message); return false; }
+}
 
 // On Railway: uploads live on persistent volume; locally: public/uploads
 const VOLUME = process.env.RAILWAY_VOLUME_MOUNT_PATH || null;
@@ -67,6 +95,24 @@ if (VOLUME) app.use('/uploads', express.static(uploadsDir));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+
+// Feed new-posts check — lightweight, just returns count of posts newer than given timestamp
+app.get('/api/posts/new-count', auth, (req, res) => {
+  const since = req.query.since;
+  if (!since) return res.json({ count: 0 });
+  const DEMO_EMAIL = process.env.DEMO_EMAIL || 'ankit@example.com';
+  const me = db.prepare(`SELECT email FROM users WHERE id=?`).get(req.user.id);
+  const isDemo = me?.email === DEMO_EMAIL;
+  const feedFilter = isDemo
+    ? `WHERE p.is_published=1 AND p.created_at > ?`
+    : `WHERE p.is_published=1 AND p.created_at > ? AND (p.author_id=? OR p.author_id IN (
+        SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
+        FROM connections WHERE (requester_id=? OR addressee_id=?) AND status='accepted'
+      ))`;
+  const params = isDemo ? [since] : [since, req.user.id, req.user.id, req.user.id, req.user.id];
+  const row = db.prepare(`SELECT COUNT(*) as n FROM posts p ${feedFilter}`).get(...params);
+  res.json({ count: row?.n || 0 });
+});
 
 // Multer storage
 const storage = multer.diskStorage({
