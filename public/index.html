@@ -304,7 +304,9 @@ function go(page, extra) {
 }
 function toggleDark() {
   document.body.classList.toggle('dark');
-  api('/api/users/me', { method: 'PUT', body: JSON.stringify({ is_dark_mode: document.body.classList.contains('dark') ? 1 : 0 }) });
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('nxdark', isDark ? '1' : '0');
+  api('/api/users/me', { method: 'PUT', body: JSON.stringify({ is_dark_mode: isDark ? 1 : 0 }) });
 }
 function initSocket() {
   if (typeof io === 'undefined') return;
@@ -398,19 +400,39 @@ async function renderSearch(q) {
 // ── HOME ──────────────────────────────────────────────────────────────────
 async function renderHome() {
   document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="feed"></div></div></div>`;
-  renderSB(); renderComposer();
+  await renderSB(); renderComposer();
   const posts = await api('/api/posts'); postsData = Array.isArray(posts) ? posts : [];
   if (!postsData.length) {
     document.getElementById('feed').innerHTML = `<div class="card empty"><i class="fas fa-newspaper"></i><h3 style="margin-bottom:8px">Your feed is empty</h3><p>Write your first post above, or <a href="#" onclick="go('network')" style="color:var(--primary);font-weight:600">connect with people</a> to see their updates.</p></div>`;
   } else { renderFeed(postsData); }
 }
-function renderSB() {
+async function renderSB() {
   const el = document.getElementById('sl'); if (!el || !me) return;
-  el.innerHTML = `<div class="card" style="position:sticky;top:76px">
+  // Fetch fresh me data for sidebar (includes skills, location etc)
+  const full = await api('/api/users/me');
+  if (full && full.id) me = { ...me, ...full };
+  el.innerHTML = `<div class="card" style="position:sticky;top:76px;overflow:hidden">
     <div class="sb-banner"><div class="sb-avwrap">${me.avatar_url ? `<img src="${me.avatar_url}" class="av av56" style="object-fit:cover;border:3px solid var(--card);border-radius:50%">` : `<div class="av av56" style="border:3px solid var(--card)">${me.name[0]}</div>`}</div></div>
-    <div class="sb-body"><h3><a href="#" onclick="go('profile')" style="color:var(--text);text-decoration:none">${me.name}</a></h3><p>${me.headline || 'Add a headline'}</p></div>
-    <div class="sb-stat"><span>Connections</span><span>${me.connections_count || 0}</span></div>
-    <div style="padding:12px 16px"><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-user"></i> View Profile</button></div>
+    <div class="sb-body">
+      <h3><a href="#" onclick="go('profile')" style="color:var(--text);text-decoration:none">${me.name}</a></h3>
+      <p style="margin:2px 0 4px">${me.headline || '<span style="color:var(--primary);font-size:12px">+ Add headline</span>'}</p>
+      ${me.location ? `<p style="font-size:12px;color:var(--sub);margin:0"><i class="fas fa-location-dot" style="width:14px"></i> ${me.location}</p>` : ''}
+      ${me.current_position ? `<p style="font-size:12px;color:var(--sub);margin:4px 0 0"><i class="fas fa-briefcase" style="width:14px"></i> ${me.current_position}</p>` : ''}
+    </div>
+    <div class="sb-stat"><span><i class="fas fa-users" style="color:var(--primary)"></i> Connections</span><span style="color:var(--primary);font-weight:700">${me.connections_count || 0}</span></div>
+    ${me.skills?.length ? `<div style="padding:10px 16px;border-top:1px solid var(--border)"><p style="font-size:11px;font-weight:700;color:var(--sub);margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px">Skills</p><div style="display:flex;flex-wrap:wrap;gap:4px">${me.skills.slice(0,5).map(s=>`<span class="chip" style="font-size:10px;padding:2px 8px">${s}</span>`).join('')}${me.skills.length > 5 ? `<span style="font-size:11px;color:var(--sub);align-self:center">+${me.skills.length-5}</span>` : ''}</div></div>` : ''}
+    <div style="padding:10px 16px;border-top:1px solid var(--border)">
+      <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-user"></i> View Profile</button>
+    </div>
+    <div style="padding:0 16px 12px;border-top:1px solid var(--border);margin-top:4px">
+      <p style="font-size:11px;font-weight:700;color:var(--sub);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">Quick Links</p>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <a href="#" onclick="go('salary')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-rupee-sign" style="width:18px;color:var(--primary)"></i> Salary Board</a>
+        <a href="#" onclick="go('jobs')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-briefcase" style="width:18px;color:var(--primary)"></i> Browse Jobs</a>
+        <a href="#" onclick="go('experts')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-graduation-cap" style="width:18px;color:var(--primary)"></i> Find Mentors</a>
+        <a href="#" onclick="go('reviews')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-star" style="width:18px;color:var(--primary)"></i> Company Reviews</a>
+      </div>
+    </div>
   </div>`;
 }
 let cmode = '';
@@ -509,7 +531,18 @@ async function votePoll(pid, oid) {
   const idx = postsData.findIndex(p => p.id === pid);
   if (idx >= 0) { postsData[idx].poll_options = res.options; postsData[idx].user_vote = oid; const el = document.getElementById('pc-' + pid); if (el) el.outerHTML = renderPost(postsData[idx]); }
 }
-async function delPost(id) { if (!confirm('Delete this post?')) return; await api('/api/posts/' + id, { method: 'DELETE' }); document.getElementById('pc-' + id)?.remove(); toast('Post deleted'); }
+async function delPost(id) {
+  showModal(`<div style="text-align:center;padding:8px 0">
+    <i class="fas fa-trash" style="font-size:36px;color:#ef4444;margin-bottom:12px;display:block"></i>
+    <h3 style="margin:0 0 8px">Delete post?</h3>
+    <p style="color:var(--sub);margin:0 0 20px;font-size:14px">This can't be undone.</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-o" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-p" style="background:#ef4444" onclick="closeModal();_doDelPost(${id})"><i class="fas fa-trash"></i> Delete</button>
+    </div>
+  </div>`);
+}
+async function _doDelPost(id) { await api('/api/posts/' + id, { method: 'DELETE' }); document.getElementById('pc-' + id)?.remove(); toast('Post deleted'); }
 function sharePost(id) { const url = window.location.origin + '?post=' + id; navigator.clipboard?.writeText(url).then(() => toast('Link copied!')).catch(() => toast('Share: ' + url)); }
 
 // ── PROFILE ───────────────────────────────────────────────────────────────
@@ -525,7 +558,7 @@ async function renderProfile(uid) {
     : `<button class="btn btn-p" onclick="sendConn(${d.id},this)"><i class="fas fa-user-plus"></i> Connect</button>`;
   document.getElementById('pr').innerHTML = `<div style="max-width:760px;margin:0 auto">
     <div class="card" style="overflow:hidden">
-      <div class="prof-banner">${d.banner_url ? `<img src="${d.banner_url}" style="width:100%;height:100%;object-fit:cover">` : ''}${isMe ? `<label style="position:absolute;bottom:10px;right:14px;cursor:pointer;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);padding:6px 12px;border-radius:8px;color:#fff;font-size:12px;font-weight:700"><i class="fas fa-camera"></i> Banner<input type="file" accept="image/*" style="display:none" onchange="uploadFile(this,'banner')"></label>` : ''}</div>
+      <div class="prof-banner" style="${d.banner_url ? '' : 'background:linear-gradient(135deg,var(--primary),var(--secondary))'}">${d.banner_url ? `<img src="${d.banner_url}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:rgba(0,0,0,.15)"></div>` : ''}${isMe ? `<label style="position:absolute;bottom:10px;right:14px;cursor:pointer;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);padding:6px 12px;border-radius:8px;color:#fff;font-size:12px;font-weight:700"><i class="fas fa-camera"></i> Banner<input type="file" accept="image/*" style="display:none" onchange="uploadFile(this,'banner')"></label>` : ''}</div>
       <div class="prof-avwrap">${d.avatar_url ? `<img src="${d.avatar_url}" class="av av80" style="object-fit:cover;border:4px solid var(--card);border-radius:50%">` : `<div class="av av80" style="border:4px solid var(--card)">${d.name[0]}</div>`}${isMe ? `<label style="position:absolute;bottom:0;right:0;width:24px;height:24px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fas fa-camera" style="color:#fff;font-size:11px"></i><input type="file" accept="image/*" style="display:none" onchange="uploadFile(this,'avatar')"></label>` : ''}</div>
       <div class="prof-body">
         <h1>${d.name}</h1>
@@ -737,7 +770,7 @@ async function saveExpert() {
   const b = { expertise: document.getElementById('exex').value, price_per_session: parseInt(document.getElementById('expr').value) || 0, bio: document.getElementById('exbi').value };
   if (!b.expertise) { toast('Expertise required'); return; }
   const jitsi = `https://meet.jit.si/Nexus-${Date.now()}`;
-  await api('/api/experts', { method: 'POST', body: JSON.stringify({ ...b, booking_url: jitsi }) }); closeModal(); toast('Profile submitted! 🎓'); renderExperts();
+  await api('/api/experts/me', { method: 'POST', body: JSON.stringify({ ...b, expertise: b.expertise.split(',').map(s=>s.trim()).filter(Boolean), booking_url: jitsi }) }); closeModal(); toast('Profile submitted! 🎓'); renderExperts();
 }
 
 // ── JOBS ──────────────────────────────────────────────────────────────────
@@ -774,6 +807,8 @@ async function saveJob() {
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
 (async () => {
+  // Restore dark mode immediately from localStorage (prevents flash)
+  if (localStorage.getItem('nxdark') === '1') document.body.classList.add('dark');
   const saved = localStorage.getItem('nxtoken');
   if (saved) {
     token = saved;
