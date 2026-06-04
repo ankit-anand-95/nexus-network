@@ -96,23 +96,6 @@ if (VOLUME) app.use('/uploads', express.static(uploadsDir));
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
-// Feed new-posts check — lightweight, just returns count of posts newer than given timestamp
-app.get('/api/posts/new-count', auth, (req, res) => {
-  const since = req.query.since;
-  if (!since) return res.json({ count: 0 });
-  const DEMO_EMAIL = process.env.DEMO_EMAIL || 'ankit@example.com';
-  const me = db.prepare(`SELECT email FROM users WHERE id=?`).get(req.user.id);
-  const isDemo = me?.email === DEMO_EMAIL;
-  const feedFilter = isDemo
-    ? `WHERE p.is_published=1 AND p.created_at > ?`
-    : `WHERE p.is_published=1 AND p.created_at > ? AND (p.author_id=? OR p.author_id IN (
-        SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
-        FROM connections WHERE (requester_id=? OR addressee_id=?) AND status='accepted'
-      ))`;
-  const params = isDemo ? [since] : [since, req.user.id, req.user.id, req.user.id, req.user.id];
-  const row = db.prepare(`SELECT COUNT(*) as n FROM posts p ${feedFilter}`).get(...params);
-  res.json({ count: row?.n || 0 });
-});
 
 // Multer storage
 const storage = multer.diskStorage({
@@ -137,6 +120,23 @@ const auth = (req, res, next) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 };
+// Feed new-posts check — lightweight, just returns count of posts newer than given timestamp
+app.get('/api/posts/new-count', auth, (req, res) => {
+  const since = req.query.since;
+  if (!since) return res.json({ count: 0 });
+  const DEMO_EMAIL = process.env.DEMO_EMAIL || 'ankit@example.com';
+  const me = db.prepare(`SELECT email FROM users WHERE id=?`).get(req.user.id);
+  const isDemo = me?.email === DEMO_EMAIL;
+  const feedFilter = isDemo
+    ? `WHERE p.is_published=1 AND p.created_at > ?`
+    : `WHERE p.is_published=1 AND p.created_at > ? AND (p.author_id=? OR p.author_id IN (
+        SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
+        FROM connections WHERE (requester_id=? OR addressee_id=?) AND status='accepted'
+      ))`;
+  const params = isDemo ? [since] : [since, req.user.id, req.user.id, req.user.id, req.user.id];
+  const row = db.prepare(`SELECT COUNT(*) as n FROM posts p ${feedFilter}`).get(...params);
+  res.json({ count: row?.n || 0 });
+});
 
 // Notification helper
 function createNotif(userId, actorId, type, refId, content) {
