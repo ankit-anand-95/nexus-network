@@ -167,7 +167,7 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 #ctop{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
 #ctop h3{font-size:15px;font-weight:700;margin:0}
 #ctop p{font-size:12px;color:var(--sub);margin:0}
-#cmsgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+#cmsgs{flex:1;min-height:0;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
 .bub{max-width:65%;padding:11px 16px;border-radius:18px;font-size:14px;line-height:1.5;position:relative}
 .bub time{display:block;font-size:10px;opacity:.6;margin-top:4px}
 .bub.mine{background:var(--primary);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
@@ -376,9 +376,10 @@ function initSocket() {
   socket = io(); socket.emit('authenticate', token);
 
   socket.on('message', (m) => {
-    if (curPage !== 'messaging') {
+    // Only handle badge/toast here when NOT in messaging (chat openChat overrides this handler)
+    if (curPage !== 'messaging' && m && m.sender_id != me?.id) {
       updBadge('mbadge', 1);
-      if (m && m.sender_name) toast(`💬 New message from ${m.sender_name}`);
+      if (m.sender_name) toast(`💬 New message from ${m.sender_name}`);
     }
   });
 
@@ -931,10 +932,16 @@ async function openChat(uid, name) {
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
   if (socket) {
     socket.off('message'); socket.on('message', m => {
-      if ((m.sender_id == uid || m.receiver_id == uid) && m.sender_id != me?.id) {
+      // Badge + toast when not on messaging page
+      if (curPage !== 'messaging' && m.sender_id != me?.id) {
+        updBadge('mbadge', 1);
+        if (m.sender_name) toast(`💬 New message from ${m.sender_name}`);
+      }
+      // Only render in chat if the open conversation matches
+      if (m.sender_id != me?.id && (m.sender_id == uid || m.receiver_id == uid)) {
         // Only append socket messages from OTHER person (own messages added in sendMsg)
         const mb = document.getElementById('cmsgs');
-        if (mb) {
+        if (mb && !mb.querySelector('[data-mid="' + m.id + '"]')) {
           mb.innerHTML += `<div class="bub theirs" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`;
           mb.scrollTop = mb.scrollHeight;
           // Refresh thread list for receiver too

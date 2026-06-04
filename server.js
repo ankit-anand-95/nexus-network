@@ -571,6 +571,8 @@ app.post('/api/messages/:userId', auth, (req, res) => {
   const msg = { id: info.lastInsertRowid, sender_id: req.user.id, receiver_id: receiverId, content, sender_name: sender.name, sender_avatar: sender.avatar_url, created_at: new Date().toISOString(), is_read: 0 };
   const room = [req.user.id, receiverId].sort().join('-');
   io.to(room).emit('message', msg);
+  // Also emit to receiver's personal room in case they haven't joined the chat room yet (new conversation)
+  io.to(`user_${receiverId}`).emit('message', msg);
   res.json(msg);
 });
 
@@ -780,7 +782,12 @@ io.on('connection', socket => {
       const { id } = jwt.verify(token, JWT_SECRET);
       socket.userId = id;
       socket.join(`user_${id}`);
-    } catch {}
+      // Auto-join all existing conversation rooms so receiver gets messages even without opening chat
+      const partners = db.prepare('SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?').all(id, id, id);
+      partners.forEach(({ partner_id }) => {
+        const room = [id, partner_id].sort().join('-');
+        socket.join(room);
+      });    } catch {}
   });
   socket.on('join_chat', (otherId) => {
     if (!socket.userId) return;
