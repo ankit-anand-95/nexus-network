@@ -153,7 +153,7 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .sug-card p{font-size:12px;color:var(--sub);margin:0 0 12px;line-height:1.4;min-height:32px}
 
 /* MESSAGING */
-#mlay{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 100px);background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden}
+#mlay{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 60px);background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden}
 .mlist{border-right:1px solid var(--border);display:flex;flex-direction:column}
 .mhdr{padding:16px 20px;font-weight:800;font-size:16px;border-bottom:1px solid var(--border);display:flex;align-items:center}
 #ml{flex:1;overflow-y:auto}
@@ -334,7 +334,7 @@ function go(page, extra) {
   const si = document.getElementById('gsrch'); if (si) si.value = '';
   document.querySelectorAll('.nb[id^=nb-]').forEach(b => b.classList.remove('active'));
   const nb = document.getElementById('nb-' + page); if (nb) nb.classList.add('active');
-  document.getElementById('pr').innerHTML = '<div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div>';
+  const _pr = document.getElementById('pr'); _pr.removeAttribute('style'); _pr.innerHTML = '<div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div>';
   ({ home: renderHome, profile: renderProfile, network: renderNetwork, messaging: renderMessaging, notifications: renderNotifs, salary: renderSalary, reviews: renderReviews, experts: renderExperts, jobs: renderJobs }[page] || renderHome)(extra);
 }
 function toggleDark() {
@@ -365,7 +365,7 @@ function logout() {
   localStorage.removeItem('nxdark');
   token = ''; me = null;
   if (socket) { socket.disconnect(); socket = null; }
-  clearInterval(window._feedPollTimer);
+  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer);
   document.body.classList.remove('dark');
   document.getElementById('appw').style.display = 'none';
   showAuth('login');
@@ -448,7 +448,8 @@ function renderAF(m, resetToken) {
     <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="Password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
     ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" placeholder="e.g. Software Engineer at Google"></div>' : ''}
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
-    <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>`;
+    <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>
+    ${il ? '<p style="text-align:center;margin-top:6px;font-size:12px"><a href="#" onclick="renderAF(&apos;forgot&apos;)" style="color:var(--sub)">Forgot password?</a></p>' : ''}`;
 }
 async function doAuth(m) {
   const e = document.getElementById('ae')?.value.trim(), p = document.getElementById('ap')?.value;
@@ -465,7 +466,8 @@ async function doAuth(m) {
   token = r.token; me = r.user; localStorage.setItem('nxtoken', token);
   document.getElementById('awrap').style.display = 'none';
   document.getElementById('appw').style.display = 'flex';
-  initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+  clearInterval(window._badgeTimer);
+  initSocket(); go('home'); pollBadges(); window._badgeTimer = setInterval(pollBadges, 30000);
   // Update Me button avatar immediately after login
   const avEl = document.getElementById('me-av-sm');
   if (avEl && me) {
@@ -562,7 +564,7 @@ async function renderHome() {
     obs.observe(sentinel);
   }
   // Auto-check for new posts every 45 seconds
-  clearInterval(window._feedPollTimer);
+  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer);
   window._feedPollTimer = setInterval(checkNewPosts, 45000);
 }
 
@@ -903,7 +905,9 @@ async function actConn(id, action, btn) {
 // ── MESSAGING ─────────────────────────────────────────────────────────────
 let achat = null;
 async function renderMessaging(pre) {
-  document.getElementById('pr').innerHTML = `<div id="mlay"><div class="mlist"><div class="mhdr">Messages <button class="btn btn-p btn-sm" style="margin-left:auto;padding:4px 10px" onclick="showNewMsg()" title="New message"><i class="fas fa-edit"></i></button></div><div id="ml"><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div></div><div id="ccol"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--sub);text-align:center;padding:20px"><i class="fas fa-comment-dots" style="font-size:56px;opacity:.2;margin-bottom:16px"></i><p style="font-size:16px;font-weight:700;margin-bottom:8px">Your Messages</p><p style="font-size:13px">Select a conversation or click ✏️ to start one</p></div></div></div>`;
+  const pr = document.getElementById('pr');
+  pr.style.cssText = 'padding:60px 0 0;max-width:100%;box-sizing:border-box';
+  pr.innerHTML = `<div id="mlay"><div class="mlist"><div class="mhdr">Messages <button class="btn btn-p btn-sm" style="margin-left:auto;padding:4px 10px" onclick="showNewMsg()" title="New message"><i class="fas fa-edit"></i></button></div><div id="ml"><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div></div><div id="ccol"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--sub);text-align:center;padding:20px"><i class="fas fa-comment-dots" style="font-size:56px;opacity:.2;margin-bottom:16px"></i><p style="font-size:16px;font-weight:700;margin-bottom:8px">Your Messages</p><p style="font-size:13px">Select a conversation or click ✏️ to start one</p></div></div></div>`;
   const th = await api('/api/messages/threads'); const ml = document.getElementById('ml'); if (!ml) return;
   if (!Array.isArray(th) || !th.length) {
     ml.innerHTML = `<div style="padding:28px 20px;text-align:center;color:var(--sub)"><i class="fas fa-comment-slash" style="font-size:32px;opacity:.2;margin-bottom:10px"></i><p style="font-size:13px;font-weight:600">No conversations yet</p><p style="font-size:12px;margin-top:6px">Connect with people, then message them</p></div>`;
@@ -926,7 +930,7 @@ async function openChat(uid, name) {
   const [info, msgs] = await Promise.all([api('/api/users/' + uid).catch(() => ({ name: name || 'User' })), api('/api/messages/' + uid)]);
   const col = document.getElementById('ccol'); if (!col) return;
   col.innerHTML = `<div id="ctop">${av(info, 'av40')}<div><h3>${info.name || name}</h3><p>${info.headline || ''}</p></div><button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button></div>
-    <div id="cmsgs">${(Array.isArray(msgs) ? msgs : []).map(m => `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`).join('')}</div>
+    <div id="cmsgs">${(Array.isArray(msgs) ? msgs : []).map(m => `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`).join('')}</div>
     <div id="typind">typing…</div>
     <div id="cinp"><input id="cinput" placeholder="Write a message…" onkeydown="if(event.key==='Enter')sendMsg();else emitTyp()"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
@@ -962,8 +966,7 @@ async function sendMsg() {
   const inp = document.getElementById('cinput'); const c = inp?.value.trim(); if (!c || !achat) return;
   inp.value = '';
   const msg = await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
-  // If socket isn't available, append message manually
-  if (!socket || !msg.id) return;
+  if (!msg || msg.error) { toast('Message failed to send'); inp.value = c; return; }
   const mb = document.getElementById('cmsgs');
   if (mb && !mb.querySelector('[data-mid="' + msg.id + '"]')) {
     mb.innerHTML += `<div class="bub mine" data-mid="${msg.id}">${c}<time>just now</time></div>`;
@@ -1113,7 +1116,8 @@ async function saveJob() {
         document.getElementById('awrap').style.display = 'none';
         document.getElementById('appw').style.display = 'flex';
         if (me.is_dark_mode) document.body.classList.add('dark');
-        initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+        clearInterval(window._badgeTimer);
+        initSocket(); go('home'); pollBadges(); window._badgeTimer = setInterval(pollBadges, 30000);
   // Update Me button avatar immediately after login
   const avEl = document.getElementById('me-av-sm');
   if (avEl && me) {
