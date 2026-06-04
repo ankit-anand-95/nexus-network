@@ -303,11 +303,16 @@ function av(u, cls = 'av40') {
 }
 function timeAgo(d) {
   if (!d) return '';
-  const s = Math.floor((Date.now() - new Date(d)) / 1000);
-  if (s < 60) return 'just now';
+  // SQLite CURRENT_TIMESTAMP returns UTC without 'Z' — force UTC parsing
+  const utc = (typeof d === 'string' && !d.includes('T') && !d.endsWith('Z')) ? d + 'Z' : d;
+  const s = Math.floor((Date.now() - new Date(utc)) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return s + 's ago';
   if (s < 3600) return Math.floor(s / 60) + 'm ago';
   if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  return Math.floor(s / 86400) + 'd ago';
+  if (s < 86400 * 7) return Math.floor(s / 86400) + 'd ago';
+  const dt = new Date(utc);
+  return dt.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
 }
 function toast(msg, dur = 3000) {
   const el = document.getElementById('toast-el');
@@ -460,6 +465,13 @@ async function doAuth(m) {
   document.getElementById('awrap').style.display = 'none';
   document.getElementById('appw').style.display = 'flex';
   initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+  // Update Me button avatar immediately after login
+  const avEl = document.getElementById('me-av-sm');
+  if (avEl && me) {
+    avEl.outerHTML = me.avatar_url
+      ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
+      : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
+  }
 }
 
 // ── FORGOT / RESET PASSWORD ──────────────────────────────────────────────────
@@ -918,7 +930,23 @@ async function openChat(uid, name) {
     <div id="cinp"><input id="cinput" placeholder="Write a message…" onkeydown="if(event.key==='Enter')sendMsg();else emitTyp()"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
   if (socket) {
-    socket.off('message'); socket.on('message', m => { if (m.sender_id == uid || m.receiver_id == uid) { const mb = document.getElementById('cmsgs'); if (mb) { mb.innerHTML += `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`; mb.scrollTop = mb.scrollHeight; } } });
+    socket.off('message'); socket.on('message', m => {
+      if ((m.sender_id == uid || m.receiver_id == uid) && m.sender_id != me?.id) {
+        // Only append socket messages from OTHER person (own messages added in sendMsg)
+        const mb = document.getElementById('cmsgs');
+        if (mb) {
+          mb.innerHTML += `<div class="bub theirs" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`;
+          mb.scrollTop = mb.scrollHeight;
+          // Refresh thread list for receiver too
+          api('/api/messages/threads').then(th => {
+            const ml = document.getElementById('ml');
+            if (ml && Array.isArray(th) && th.length) {
+              ml.innerHTML = th.map(t => `<div class="mthread${t.id==uid?' active':''}" id="mt-${t.id}" onclick="openChat(${t.id},'${String(t.name).replace(/'/g,'&apos;')}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||''}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
+            }
+          });
+        }
+      }
+    });
     socket.off('typing'); socket.on('typing', ({ from }) => { if (from == uid) { const ti = document.getElementById('typind'); if (ti) { ti.style.display = 'block'; clearTimeout(window._tt); window._tt = setTimeout(() => ti.style.display = 'none', 2000); } } });
   }
 }
@@ -926,7 +954,22 @@ function emitTyp() { if (socket && achat) socket.emit('typing', { to: achat }); 
 async function sendMsg() {
   const inp = document.getElementById('cinput'); const c = inp?.value.trim(); if (!c || !achat) return;
   inp.value = '';
-  await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
+  const msg = await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
+  // If socket isn't available, append message manually
+  if (!socket || !msg.id) return;
+  const mb = document.getElementById('cmsgs');
+  if (mb && !mb.querySelector('[data-mid="' + msg.id + '"]')) {
+    mb.innerHTML += `<div class="bub mine" data-mid="${msg.id}">${c}<time>just now</time></div>`;
+    mb.scrollTop = mb.scrollHeight;
+  }
+  // Refresh thread list so sender sees the conversation appear
+  const ml = document.getElementById('ml');
+  if (ml) {
+    const th = await api('/api/messages/threads');
+    if (Array.isArray(th) && th.length) {
+      ml.innerHTML = th.map(t => `<div class="mthread${t.id == achat ? ' active' : ''}" id="mt-${t.id}" onclick="openChat(${t.id},'${t.name.replace(/'/g,'&apos;')}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||'Start a conversation'}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
+    }
+  }
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
@@ -1064,6 +1107,13 @@ async function saveJob() {
         document.getElementById('appw').style.display = 'flex';
         if (me.is_dark_mode) document.body.classList.add('dark');
         initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+  // Update Me button avatar immediately after login
+  const avEl = document.getElementById('me-av-sm');
+  if (avEl && me) {
+    avEl.outerHTML = me.avatar_url
+      ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
+      : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
+  }
       } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
     } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
   } else { showAuth(); }
