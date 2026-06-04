@@ -7,6 +7,9 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const validator = require('validator');
 const db = require('./db');
 
 const app = express();
@@ -23,9 +26,42 @@ const uploadsDir = VOLUME
   : path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+// ── Security headers ──────────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // we load FA from CDN, keep flexible
+  crossOriginEmbedderPolicy: false
+}));
+
+// ── Rate limiting ──────────────────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // 20 login/register attempts per IP per window
+  message: { error: 'Too many attempts. Try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minute
+  max: 300,             // 300 req/min per IP (5 req/sec, plenty for real users)
+  message: { error: 'Too many requests. Slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/health' // don't rate-limit health checks
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10, // 10 uploads/min per IP
+  message: { error: 'Upload limit reached. Try again in a minute.' }
+});
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // cap payload size
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/api/auth', authLimiter);    // strict limit on login/register
+app.use('/api/upload', uploadLimiter); // strict limit on uploads
+app.use('/api', apiLimiter);           // general API limit
 // Serve uploads from volume path when on Railway
 if (VOLUME) app.use('/uploads', express.static(uploadsDir));
 
@@ -37,7 +73,12 @@ const storage = multer.diskStorage({
   destination: uploadsDir,
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const fileFilter = (req, file, cb) => {
+  if (ALLOWED_MIME.includes(file.mimetype)) cb(null, true);
+  else cb(new Error('Only JPEG, PNG, WebP and GIF images are allowed'), false);
+};
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter });
 
 // Auth middleware
 const auth = (req, res, next) => {
@@ -151,7 +192,13 @@ app.get('/api/users/me', auth, (req, res) => {
 });
 
 app.put('/api/users/me', auth, (req, res) => {
-  const { name, headline, location, about, current_position, is_dark_mode } = req.body;
+  const rawBody = req.body;
+  const name = sanitize(rawBody.name, 100);
+  const headline = sanitize(rawBody.headline, 220);
+  const location = sanitize(rawBody.location, 100);
+  const about = sanitizeRich(rawBody.about, 2000);
+  const current_position = sanitize(rawBody.current_position, 220);
+  const is_dark_mode = rawBody.is_dark_mode;
   db.prepare(`UPDATE users SET name=COALESCE(?,name), headline=COALESCE(?,headline), location=COALESCE(?,location), about=COALESCE(?,about), current_position=COALESCE(?,current_position), is_dark_mode=COALESCE(?,is_dark_mode) WHERE id=?`)
     .run(name, headline, location, about, current_position, is_dark_mode, req.user.id);
   res.json({ ok: true });
@@ -676,4 +723,4 @@ io.on('connection', socket => {
   });
 });
 
-server.listen(PORT, () => console.log(`Nexus running at http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`));

@@ -398,13 +398,46 @@ async function renderSearch(q) {
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────
+let _feedPage = 1, _feedLoading = false, _feedDone = false;
+
 async function renderHome() {
-  document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="feed"></div></div></div>`;
+  _feedPage = 1; _feedLoading = false; _feedDone = false;
+  document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="feed"></div><div id="feed-sentinel" style="height:40px;display:flex;align-items:center;justify-content:center"></div></div></div>`;
   await renderSB(); renderComposer();
-  const posts = await api('/api/posts'); postsData = Array.isArray(posts) ? posts : [];
-  if (!postsData.length) {
-    document.getElementById('feed').innerHTML = `<div class="card empty"><i class="fas fa-newspaper"></i><h3 style="margin-bottom:8px">Your feed is empty</h3><p>Write your first post above, or <a href="#" onclick="go('network')" style="color:var(--primary);font-weight:600">connect with people</a> to see their updates.</p></div>`;
-  } else { renderFeed(postsData); }
+  await loadMorePosts();
+  // Infinite scroll observer
+  const sentinel = document.getElementById('feed-sentinel');
+  if (sentinel) {
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) loadMorePosts();
+    }, { rootMargin: '200px' });
+    obs.observe(sentinel);
+  }
+}
+
+async function loadMorePosts() {
+  if (_feedLoading || _feedDone) return;
+  _feedLoading = true;
+  const sentinel = document.getElementById('feed-sentinel');
+  if (sentinel) sentinel.innerHTML = `<span style="color:var(--sub);font-size:13px"><i class="fas fa-spinner fa-spin"></i> Loading…</span>`;
+  const posts = await api('/api/posts?page=' + _feedPage);
+  _feedLoading = false;
+  if (!Array.isArray(posts) || posts.length === 0) {
+    _feedDone = true;
+    if (sentinel) sentinel.innerHTML = _feedPage === 1
+      ? `<div class="card empty" style="width:100%"><i class="fas fa-newspaper"></i><h3>Your feed is empty</h3><p>Write your first post, or <a href="#" onclick="go('network')" style="color:var(--primary);font-weight:600">connect with people</a>.</p></div>`
+      : `<p style="color:var(--sub);font-size:13px;padding:16px">You're all caught up ✓</p>`;
+    return;
+  }
+  postsData = _feedPage === 1 ? posts : [...postsData, ...posts];
+  _feedPage++;
+  const feed = document.getElementById('feed');
+  if (feed) {
+    if (_feedPage === 2) feed.innerHTML = posts.map(renderPost).join('');
+    else feed.innerHTML += posts.map(renderPost).join('');
+  }
+  if (sentinel) sentinel.innerHTML = '';
+  if (posts.length < 20) { _feedDone = true; if (sentinel && _feedPage > 2) sentinel.innerHTML = `<p style="color:var(--sub);font-size:13px;padding:16px">You're all caught up ✓</p>`; }
 }
 async function renderSB() {
   const el = document.getElementById('sl'); if (!el || !me) return;
@@ -468,7 +501,12 @@ async function submitPost() {
   const res = await api('/api/posts', { method: 'POST', body: JSON.stringify(body) });
   if (res.error) { toast('Error: ' + res.error); return; }
   cmode = ''; document.getElementById('ptxt').value = ''; document.getElementById('cext').innerHTML = ''; document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('on')); document.getElementById('anonchk').checked = false;
-  if (!sched) { postsData.unshift(res); renderFeed(postsData); toast('Posted! 🎉'); } else toast('Scheduled! Will publish at ' + new Date(sched).toLocaleString());
+  if (!sched) {
+    postsData.unshift(res);
+    const feed = document.getElementById('feed');
+    if (feed) feed.insertAdjacentHTML('afterbegin', renderPost(res));
+    toast('Posted! 🎉');
+  } else toast('Scheduled! Will publish at ' + new Date(sched).toLocaleString());
 }
 
 // ── FEED ──────────────────────────────────────────────────────────────────
