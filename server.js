@@ -393,10 +393,13 @@ app.post('/api/posts', auth, (req, res) => {
     newPost.poll_options = db.prepare(`SELECT * FROM poll_options WHERE post_id=?`).all(info.lastInsertRowid);
   }
   res.json(newPost || { id: info.lastInsertRowid });
+  // Broadcast new post to all connected users in real-time
+  if (newPost && isPublished) io.emit('new_post', newPost);
 });
 
 app.delete('/api/posts/:id', auth, (req, res) => {
-  db.prepare(`DELETE FROM posts WHERE id=? AND author_id=?`).run(req.params.id, req.user.id);
+  const r = db.prepare(`DELETE FROM posts WHERE id=? AND author_id=?`).run(req.params.id, req.user.id);
+  if (r.changes > 0) io.emit('post_deleted', { postId: Number(req.params.id) });
   res.json({ ok: true });
 });
 
@@ -417,7 +420,10 @@ function toggleLike(req, res) {
     }
   }
   const updated = db.prepare(`SELECT likes_count FROM posts WHERE id=?`).get(postId);
-  res.json({ liked: !existing, likes_count: updated?.likes_count ?? 0 });
+  const result = { liked: !existing, likes_count: updated?.likes_count ?? 0 };
+  // Broadcast updated like count to all users
+  io.emit('post_liked', { postId: Number(postId), likes_count: result.likes_count });
+  res.json(result);
 }
 app.post('/api/posts/:id/like', auth, toggleLike);
 app.delete('/api/posts/:id/like', auth, toggleLike);
@@ -430,7 +436,10 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
   db.prepare(`UPDATE posts SET comments_count = comments_count+1 WHERE id=?`).run(postId);
   const post = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(postId);
   const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  createNotif(post.author_id, req.user.id, 'comment', postId, `${actor.name} commented on your post`);
+  if (post && post.author_id !== req.user.id && actor) createNotif(post.author_id, req.user.id, 'comment', postId, `${actor.name} commented on your post`);
+  const newCount = db.prepare(`SELECT comments_count FROM posts WHERE id=?`).get(postId)?.comments_count ?? 0;
+  // Broadcast updated comment count to all users
+  io.emit('post_commented', { postId: Number(postId), comments_count: newCount });
   res.json({ id: info.lastInsertRowid });
 });
 
@@ -450,6 +459,8 @@ app.post('/api/posts/:id/poll/:optionId/vote', auth, (req, res) => {
   db.prepare(`INSERT INTO poll_votes (post_id, option_id, user_id) VALUES (?, ?, ?)`).run(postId, optionId, req.user.id);
   db.prepare(`UPDATE poll_options SET votes_count = votes_count+1 WHERE id=?`).run(optionId);
   const options = db.prepare(`SELECT * FROM poll_options WHERE post_id=?`).all(postId);
+  // Broadcast poll update to all users
+  io.emit('poll_voted', { postId: Number(postId), options });
   res.json({ options });
 });
 

@@ -381,7 +381,7 @@ function logout() {
   localStorage.removeItem('nxdark');
   token = ''; me = null;
   if (socket) { socket.disconnect(); socket = null; }
-  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
+  clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
   document.body.classList.remove('dark');
   document.getElementById('appw').style.display = 'none';
   showAuth('login');
@@ -452,6 +452,59 @@ function initSocket() {
       toast(`${icons[data.type]||'🔔'} ${data.content}`);
     }
     if (data?.type === 'connection_request' && curPage === 'network') renderNetwork();
+  });
+
+  // ── REAL-TIME FEED EVENTS ──────────────────────────────────────────────────
+  socket.on('new_post', p => {
+    // Prepend to feed if user is on home page; skip own posts (already inserted locally)
+    if (curPage !== 'home') return;
+    const feed = document.getElementById('feed'); if (!feed) return;
+    if (feed.querySelector('#pc-' + p.id)) return; // already in DOM
+    const div = document.createElement('div');
+    div.innerHTML = renderPost(p);
+    feed.insertBefore(div.firstElementChild, feed.firstChild);
+  });
+
+  socket.on('post_deleted', ({ postId }) => {
+    document.getElementById('pc-' + postId)?.remove();
+  });
+
+  socket.on('post_liked', ({ postId, likes_count }) => {
+    const card = document.getElementById('pc-' + postId); if (!card) return;
+    const btn = card.querySelector('.pact');
+    if (btn && !btn.classList.contains('liked')) {
+      // Only update count display — don't flip liked state for this user
+      const icon = btn.querySelector('i')?.outerHTML || '<i class="far fa-heart"></i>';
+      btn.innerHTML = `${icon} ${likes_count}`;
+    }
+  });
+
+  socket.on('post_commented', ({ postId, comments_count }) => {
+    const card = document.getElementById('pc-' + postId); if (!card) return;
+    const btns = card.querySelectorAll('.pact');
+    if (btns[1]) btns[1].innerHTML = `<i class="far fa-comment"></i> ${comments_count}`;
+  });
+
+  socket.on('poll_voted', ({ postId, options }) => {
+    const card = document.getElementById('pc-' + postId); if (!card) return;
+    const tot = options.reduce((s, o) => s + (o.votes_count || 0), 0);
+    // Only update if user hasn't voted (no user_vote state in DOM means they can still vote)
+    // If results bars visible update them; if still showing buttons, keep buttons (user hasn't voted yet)
+    const bars = card.querySelectorAll('.poll-bar');
+    if (bars.length) {
+      // Results already showing — update percentages
+      options.forEach((o, i) => {
+        const pct = tot ? Math.round(o.votes_count / tot * 100) : 0;
+        if (bars[i]) bars[i].style.width = pct + '%';
+        const row = bars[i]?.closest('.poll-opt');
+        if (row) {
+          const strong = row.querySelector('strong');
+          if (strong) strong.textContent = pct + '%';
+        }
+      });
+      const vtxt = card.querySelector('.poll-opt')?.closest('div')?.querySelector('p');
+      if (vtxt) vtxt.textContent = `${tot} vote${tot !== 1 ? 's' : ''}`;
+    }
   });
 }
 function updatePresence(uid) {
@@ -630,9 +683,8 @@ async function renderHome() {
     }, { rootMargin: '200px' });
     obs.observe(sentinel);
   }
-  // Auto-check for new posts every 45 seconds
-  clearInterval(window._feedPollTimer); clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
-  window._feedPollTimer = setInterval(checkNewPosts, 45000);
+  clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
+  // New posts are pushed via socket (new_post event) — no polling needed
 }
 
 let _feedLastTs = null; // ISO timestamp of newest post in feed
