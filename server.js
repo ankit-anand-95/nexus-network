@@ -779,6 +779,51 @@ db.prepare(`UPDATE jobs SET applications_count=applications_count+1 WHERE id=?`)
   } catch { res.status(400).json({ error: 'Already applied' }); }
 });
 
+
+// ─── FORGOT / RESET PASSWORD ─────────────────────────────────────────────────
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const user = db.prepare('SELECT id, email, name FROM users WHERE email=?').get(email);
+  if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+  db.prepare('INSERT OR REPLACE INTO password_resets (user_id, token, expires_at) VALUES (?,?,?)').run(user.id, token, expiresAt);
+
+  const resetUrl = `${APP_URL}?reset=${token}`;
+  const emailSent = await sendEmail(user.email, 'Reset your Nexus password',
+    `<p>Hi ${user.name},</p>
+     <p>Click the link below to reset your password (valid for 1 hour):</p>
+     <p><a href="${resetUrl}">${resetUrl}</a></p>
+     <p>If you did not request this, ignore this email.</p>`
+  );
+
+  if (!emailSent) {
+    // Dev mode: return the link directly so it can be tested without SMTP
+    return res.json({ message: 'Reset link generated (SMTP not configured).', dev_reset_url: resetUrl });
+  }
+  res.json({ message: 'Reset link sent to your email.' });
+});
+
+app.get('/api/auth/reset-password/:token', (req, res) => {
+  const row = db.prepare('SELECT * FROM password_resets WHERE token=?').get(req.params.token);
+  if (!row || new Date(row.expires_at + 'Z') < new Date()) return res.json({ valid: false });
+  res.json({ valid: true });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password || password.length < 6) return res.status(400).json({ error: 'Invalid request' });
+  const row = db.prepare('SELECT * FROM password_resets WHERE token=?').get(token);
+  if (!row || new Date(row.expires_at + 'Z') < new Date()) return res.status(400).json({ error: 'Reset link expired. Request a new one.' });
+  const hash = await bcrypt.hash(password, 10);
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, row.user_id);
+  db.prepare('DELETE FROM password_resets WHERE user_id=?').run(row.user_id);
+  res.json({ ok: true, message: 'Password updated successfully.' });
+});
+
 // SOCKET.IO
 io.on('connection', socket => {
   socket.on('authenticate', (token) => {

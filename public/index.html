@@ -489,10 +489,14 @@ async function doForgot() {
   if (r.error) { el.innerHTML = `<p style="color:#ef4444;font-size:13px">${r.error}</p>`; return; }
   // Dev mode: show link directly
   if (r.dev_reset_url) {
-    el.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ Dev mode — <a href="${r.dev_reset_url}" style="color:var(--primary)">click here to reset</a></p>`;
+    el.innerHTML = `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;font-size:13px">
+      <p style="color:#16a34a;font-weight:700;margin:0 0 8px">✓ Reset link ready</p>
+      <p style="color:#374151;margin:0 0 10px">Email delivery is not configured. Click the button below to reset your password:</p>
+      <a href="${r.dev_reset_url}" class="btn btn-p btn-sm" style="display:inline-flex"><i class="fas fa-lock-open"></i> Reset My Password</a>
+    </div>`;
     return;
   }
-  el.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ ${r.message}</p>`;
+  el.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ ${r.message || 'Check your email for the reset link.'}</p>`;
 }
 
 async function doReset(token) {
