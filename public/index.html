@@ -235,7 +235,7 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
     </div>
     <div class="nav-links">
       <button class="nb active" id="nb-home" onclick="go('home')"><i class="fas fa-house"></i>Home</button>
-      <button class="nb" id="nb-network" onclick="go('network')"><i class="fas fa-users"></i>Network</button>
+      <button class="nb" id="nb-network" onclick="go('network')"><i class="fas fa-users"></i>Network<span id="connbadge" class="badge" style="display:none">0</span></button>
       <button class="nb" id="nb-jobs" onclick="go('jobs')"><i class="fas fa-briefcase"></i>Jobs</button>
       <button class="nb" id="nb-messaging" onclick="go('messaging')"><i class="fas fa-comment-dots"></i>Chat<span id="mbadge" class="badge" style="display:none">0</span></button>
       <button class="nb" id="nb-notifications" onclick="go('notifications')"><i class="fas fa-bell"></i>Alerts<span id="nbadge" class="badge" style="display:none">0</span></button>
@@ -311,13 +311,40 @@ function toggleDark() {
 function initSocket() {
   if (typeof io === 'undefined') return;
   socket = io(); socket.emit('authenticate', token);
-  socket.on('message', () => { if (curPage !== 'messaging') updBadge('mbadge', 1); });
-  socket.on('notification', () => pollBadges());
+
+  socket.on('message', (m) => {
+    if (curPage !== 'messaging') {
+      updBadge('mbadge', 1);
+      if (m && m.sender_name) toast(`💬 New message from ${m.sender_name}`);
+    }
+  });
+
+  socket.on('notification', (data) => {
+    pollBadges();
+    // Show a toast so user knows what happened
+    if (data && data.content) {
+      const icons = {
+        connection_request: '👤',
+        connection_accepted: '🎉',
+        like: '❤️',
+        comment: '💬',
+        session_booked: '📅'
+      };
+      const icon = icons[data.type] || '🔔';
+      toast(`${icon} ${data.content}`);
+    }
+    // If user is currently on Network page, refresh invitations live
+    if (data?.type === 'connection_request' && curPage === 'network') {
+      renderNetwork();
+    }
+  });
 }
 async function pollBadges() {
   const r = await api('/api/notifications/badges').catch(() => ({}));
   if (r.unread_notifications > 0) updBadge('nbadge', r.unread_notifications); else updBadge('nbadge', 0);
   if (r.unread_messages > 0) updBadge('mbadge', r.unread_messages); else updBadge('mbadge', 0);
+  // Show dot on Network tab if there are pending connection requests
+  if (r.pending_connections > 0) updBadge('connbadge', r.pending_connections); else updBadge('connbadge', 0);
 }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────

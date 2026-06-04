@@ -543,7 +543,8 @@ app.get('/api/notifications', auth, (req, res) => {
 app.get('/api/notifications/badges', auth, (req, res) => {
   const unread_notifications = db.prepare(`SELECT COUNT(*) as n FROM notifications WHERE user_id=? AND is_read=0`).get(req.user.id)?.n || 0;
   const unread_messages = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE receiver_id=? AND is_read=0`).get(req.user.id)?.n || 0;
-  res.json({ unread_notifications, unread_messages });
+  const pending_connections = db.prepare(`SELECT COUNT(*) as n FROM connections WHERE addressee_id=? AND status='pending'`).get(req.user.id)?.n || 0;
+  res.json({ unread_notifications, unread_messages, pending_connections });
 });
 
 app.put('/api/notifications/read-all', auth, (req, res) => {
