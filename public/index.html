@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nexus — Professional Network</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{--primary:#6366f1;--primary-dark:#4f46e5;--secondary:#8b5cf6;--bg:#f3f4f8;--card:#fff;--text:#1e1b3a;--sub:#6b7280;--border:#e5e7eb;--inp:#f9fafb;--indigo-light:#eef2ff;--r:16px;--r-sm:10px;--shadow:0 2px 12px rgba(99,102,241,.08)}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);transition:background .2s,color .2s}
+body.dark{--bg:#0f0e1a;--card:#1a1830;--text:#e8e6f0;--sub:#9ca3af;--border:#2d2b45;--inp:#221f3a;--indigo-light:#1e1b3a;--shadow:0 2px 12px rgba(0,0,0,.4)}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;height:60px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;z-index:100;box-shadow:var(--shadow)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;flex-shrink:0}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:900}
+.logo-txt{font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-srch{position:relative;flex:0 0 260px}
+.nav-srch input{width:100%;padding:9px 12px 9px 36px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--inp);font-size:13px;color:var(--text);box-sizing:border-box;transition:border .2s}
+.nav-srch input:focus{outline:none;border-color:var(--primary)}
+.nav-srch i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:13px}
+.nav-links{display:flex;gap:4px;margin-left:auto}
+.nb{display:flex;flex-direction:column;align-items:center;padding:6px 14px;border-radius:var(--r-sm);border:none;background:none;cursor:pointer;color:var(--sub);font-size:11px;gap:3px;transition:.15s;text-decoration:none;position:relative}
+.nb i{font-size:20px}
+.nb.active,.nb:hover{color:var(--primary)}
+.nb.active::after{content:'';position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);width:60%;height:2px;background:var(--primary);border-radius:2px}
+.badge{position:absolute;top:2px;right:8px;background:#ef4444;color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;font-weight:700;min-width:16px;text-align:center}
+.nav-avatar{width:36px;height:36px;border-radius:50%;cursor:pointer;object-fit:cover;border:2px solid var(--primary)}
+
+/* LAYOUT */
+#awrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%)}
+body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
+#appw{display:none;flex-direction:column;min-height:100vh}
+#pr{padding:80px 24px 40px;max-width:1080px;margin:0 auto;width:100%;box-sizing:border-box}
+
+/* AUTH */
+.abox{background:var(--card);border-radius:20px;padding:40px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(99,102,241,.18)}
+.abox h2{font-size:24px;font-weight:800;margin:0 0 6px}
+.asub{color:var(--sub);font-size:14px;margin:0 0 24px}
+.fg{margin-bottom:16px}
+.fg label{display:block;font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.fg input,.fg textarea,.fg select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:14px;box-sizing:border-box;transition:border .2s;font-family:inherit}
+.fg input:focus,.fg textarea:focus,.fg select:focus{outline:none;border-color:var(--primary)}
+.atog{text-align:center;font-size:13px;color:var(--sub);margin-top:16px}
+.atog a{color:var(--primary);font-weight:700;text-decoration:none}
+.err{background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px}
+
+/* CARDS */
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);margin-bottom:12px;box-shadow:var(--shadow)}
+.ch{font-size:15px;font-weight:800;padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+.cb{padding:16px 20px}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.chip-p{background:var(--indigo-light);color:var(--primary)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--r-sm);border:none;cursor:pointer;font-size:13px;font-weight:700;transition:.15s;text-decoration:none}
+.btn-p{background:var(--primary);color:#fff}.btn-p:hover{background:var(--primary-dark)}
+.btn-o{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}.btn-o:hover{background:var(--indigo-light)}
+.btn-g{background:var(--inp);color:var(--sub);border:1.5px solid var(--border)}
+.btn-sm{padding:6px 13px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* FEED */
+.two-col{display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start}
+@media(max-width:860px){.two-col{grid-template-columns:1fr}}
+.sb-banner{height:64px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:var(--r) var(--r) 0 0;position:relative}
+.sb-avwrap{position:absolute;bottom:-28px;left:20px}
+.sb-body{padding:36px 20px 12px}
+.sb-body h3{font-size:15px;font-weight:800;margin:0 0 4px}
+.sb-body p{font-size:12px;color:var(--sub);margin:0}
+.sb-stat{display:flex;justify-content:space-between;padding:8px 20px;font-size:12px;border-top:1px solid var(--border)}
+.sb-stat span:last-child{font-weight:700;color:var(--primary)}
+
+/* COMPOSER */
+.comp-wrap{padding:16px 20px 8px}
+.comp-top{display:flex;gap:12px;align-items:flex-start}
+.comp-ta{flex:1;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--r-sm);resize:none;background:var(--inp);color:var(--text);font-size:14px;font-family:inherit;min-height:88px;transition:border .2s;line-height:1.5}
+.comp-ta:focus{outline:none;border-color:var(--primary)}
+.comp-acts{display:flex;align-items:center;padding:8px 20px 12px;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:10px}
+.comp-ext{padding:0}
+.cbtn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--r-sm);background:none;border:1.5px solid var(--border);cursor:pointer;font-size:12px;font-weight:700;color:var(--sub);transition:.15s}
+.cbtn:hover,.cbtn.on{background:var(--indigo-light);border-color:var(--primary);color:var(--primary)}
+.anon-lbl{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto}
+
+/* POSTS */
+.post{padding:0}
+.post-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px 0}
+.post-hdr .pinfo h4{font-size:14px;font-weight:700;margin:0 0 2px}
+.post-hdr .pinfo p{font-size:12px;color:var(--sub);margin:0}
+.post-body{padding:12px 20px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.post-img{width:100%;max-height:480px;object-fit:cover;border-radius:0}
+.post-acts{display:flex;align-items:center;gap:4px;padding:8px 12px;border-top:1px solid var(--border)}
+.pact{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r-sm);background:none;border:none;cursor:pointer;font-size:13px;color:var(--sub);font-weight:600;transition:.15s}
+.pact:hover{background:var(--indigo-light);color:var(--primary)}
+.pact.liked{color:var(--primary)}
+.anon-badge{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+
+/* POLL */
+.poll-opt{margin-bottom:8px}
+.poll-bar-wrap{display:flex;align-items:center;gap:10px}
+.poll-bar{height:8px;border-radius:4px;background:var(--primary);min-width:4px;transition:width .4s}
+.poll-bg{flex:1;height:8px;border-radius:4px;background:var(--border)}
+.poll-btn{width:100%;padding:9px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--inp);cursor:pointer;font-size:13px;font-weight:600;color:var(--text);text-align:left;transition:.15s}
+.poll-btn:hover{border-color:var(--primary);color:var(--primary)}
+.poll-btn.voted{border-color:var(--primary);background:var(--indigo-light);color:var(--primary)}
+
+/* COMMENTS */
+.coms-area{padding:12px 20px;border-top:1px solid var(--border)}
+.com-row{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
+.com-bub{background:var(--inp);border-radius:12px;padding:10px 14px;flex:1}
+.com-bub h5{font-size:12px;font-weight:700;margin:0 0 4px}
+.com-bub p{font-size:13px;margin:0;line-height:1.4}
+.com-inp{display:flex;gap:8px;margin-top:8px}
+.com-inp input{flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px}
+.com-inp input:focus{outline:none;border-color:var(--primary)}
+
+/* PROFILE */
+.prof-banner{height:160px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:var(--r) var(--r) 0 0;position:relative}
+.prof-avwrap{position:absolute;bottom:-48px;left:28px}
+.prof-body{padding:60px 28px 20px}
+.prof-body h1{font-size:22px;font-weight:800;margin:0 0 4px}
+.prof-body .ph{font-size:14px;color:var(--sub);margin:0 0 6px}
+.prof-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.exp-row{padding:14px 0;border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:flex-start}
+.exp-ico{width:44px;height:44px;border-radius:10px;background:var(--indigo-light);display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:20px;flex-shrink:0}
+
+/* PEOPLE ROWS */
+.prow{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border)}
+.prow:last-child{border-bottom:none}
+.pinfo h4{font-size:14px;font-weight:700;margin:0 0 3px}
+.pinfo p{font-size:12px;color:var(--sub);margin:0}
+.pinfo{flex:1;min-width:0}
+
+/* SUGGESTIONS GRID */
+.sug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.sug-card{text-align:center;padding:20px 16px;border-radius:var(--r);border:1px solid var(--border);background:var(--card);transition:.15s}
+.sug-card:hover{box-shadow:0 4px 20px rgba(99,102,241,.12);transform:translateY(-2px)}
+.sug-card h4{font-size:13px;font-weight:700;margin:0 0 4px}
+.sug-card p{font-size:12px;color:var(--sub);margin:0 0 12px;line-height:1.4;min-height:32px}
+
+/* MESSAGING */
+#mlay{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 100px);background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden}
+.mlist{border-right:1px solid var(--border);display:flex;flex-direction:column}
+.mhdr{padding:16px 20px;font-weight:800;font-size:16px;border-bottom:1px solid var(--border);display:flex;align-items:center}
+#ml{flex:1;overflow-y:auto}
+.mthread{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;border-bottom:1px solid var(--border);transition:.15s;position:relative}
+.mthread:hover,.mthread.active{background:var(--indigo-light)}
+.mthread .mi{flex:1;min-width:0}
+.mthread .mi h5{font-size:13px;font-weight:700;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mthread .mi p{font-size:12px;color:var(--sub);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.udot{width:10px;height:10px;border-radius:50%;background:var(--primary);flex-shrink:0}
+#ccol{display:flex;flex-direction:column;height:100%}
+#ctop{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+#ctop h3{font-size:15px;font-weight:700;margin:0}
+#ctop p{font-size:12px;color:var(--sub);margin:0}
+#cmsgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+.bub{max-width:65%;padding:11px 16px;border-radius:18px;font-size:14px;line-height:1.5;position:relative}
+.bub time{display:block;font-size:10px;opacity:.6;margin-top:4px}
+.bub.mine{background:var(--primary);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.bub.theirs{background:var(--inp);color:var(--text);align-self:flex-start;border-bottom-left-radius:4px}
+#typind{padding:4px 20px;font-size:12px;color:var(--sub);font-style:italic;display:none;flex-shrink:0}
+#cinp{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border);flex-shrink:0}
+#cinp input{flex:1;padding:11px 16px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:14px}
+#cinp input:focus{outline:none;border-color:var(--primary)}
+
+/* AVATAR */
+.av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
+.av40{width:40px;height:40px;font-size:16px}
+.av48{width:48px;height:48px;font-size:18px}
+.av56{width:56px;height:56px;font-size:20px}
+.av80{width:80px;height:80px;font-size:28px}
+
+/* UTIL */
+.ld{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--sub);gap:10px;font-size:14px}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e1b3a;color:#fff;padding:12px 22px;border-radius:var(--r-sm);font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--card);border-radius:20px;padding:28px;width:100%;max-width:560px;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 16px 60px rgba(0,0,0,.25)}
+.mclose{position:absolute;top:16px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--sub);line-height:1}
+.empty{text-align:center;padding:48px 20px;color:var(--sub)}
+.empty i{font-size:48px;opacity:.2;margin-bottom:16px}
+.empty p{font-size:14px;margin:8px 0 0}
+
+/* FORMS */
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.frow2{display:flex;gap:10px}
+.frow2 input{flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px}
+.frow2 select{padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px}
+.frow2 input:focus,.frow2 select:focus{outline:none;border-color:var(--primary)}
+
+/* JOBS */
+.ji{padding:20px}
+.jco{color:var(--sub);font-size:13px;margin:2px 0}
+.jmeta{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0;font-size:12px;color:var(--sub)}
+.jmeta span{display:flex;align-items:center;gap:5px}
+.jdesc{font-size:13px;color:var(--sub);line-height:1.5;margin:8px 0 0}
+.fb{display:flex;justify-content:space-between;align-items:flex-start}
+
+/* PAGE HEADERS */
+.phdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.phdr h1{font-size:22px;font-weight:800;margin:0}
+
+/* RATING */
+.stars{color:#f59e0b;font-size:16px}
+
+/* SEARCH HIGHLIGHT */
+mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;padding:0 2px}
+</style>
+</head>
+<body>
+
+<!-- AUTH WRAPPER -->
+<div id="awrap" style="display:none">
+  <div class="abox">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
+      <div class="logo-icon">N</div>
+      <span style="font-size:22px;font-weight:900;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Nexus</span>
+    </div>
+    <div id="aform"></div>
+  </div>
+</div>
+
+<!-- APP WRAPPER -->
+<div id="appw">
+  <nav>
+    <a class="logo" href="#" onclick="go('home')">
+      <div class="logo-icon">N</div>
+      <span class="logo-txt">Nexus</span>
+    </a>
+    <div class="nav-srch">
+      <i class="fas fa-search"></i>
+      <input type="text" id="gsrch" placeholder="Search people, posts…" oninput="handleSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';go('home')}">
+    </div>
+    <div class="nav-links">
+      <button class="nb active" id="nb-home" onclick="go('home')"><i class="fas fa-house"></i>Home</button>
+      <button class="nb" id="nb-network" onclick="go('network')"><i class="fas fa-users"></i>Network</button>
+      <button class="nb" id="nb-jobs" onclick="go('jobs')"><i class="fas fa-briefcase"></i>Jobs</button>
+      <button class="nb" id="nb-messaging" onclick="go('messaging')"><i class="fas fa-comment-dots"></i>Chat<span id="mbadge" class="badge" style="display:none">0</span></button>
+      <button class="nb" id="nb-notifications" onclick="go('notifications')"><i class="fas fa-bell"></i>Alerts<span id="nbadge" class="badge" style="display:none">0</span></button>
+      <button class="nb" id="nb-salary" onclick="go('salary')"><i class="fas fa-indian-rupee-sign"></i>Salaries</button>
+      <button class="nb" id="nb-reviews" onclick="go('reviews')"><i class="fas fa-star"></i>Reviews</button>
+      <button class="nb" id="nb-experts" onclick="go('experts')"><i class="fas fa-chalkboard-teacher"></i>Mentors</button>
+      <button class="nb" onclick="toggleDark()" title="Toggle theme"><i class="fas fa-moon"></i></button>
+      <button class="nb" id="nb-profile" onclick="go('profile')"><i class="fas fa-user-circle"></i>Me</button>
+    </div>
+  </nav>
+  <div id="pr"><div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div></div>
+</div>
+
+<div id="toast-el" class="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let token = localStorage.getItem('nxtoken') || '';
+let me = null, socket = null, postsData = [], curPage = 'home';
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
+  const r = await fetch(path, opts);
+  return r.json().catch(() => ({}));
+}
+function av(u, cls = 'av40') {
+  const n = (u?.name || u?.author_name || 'U');
+  const l = n[0].toUpperCase();
+  const s = u?.avatar_url || u?.author_avatar;
+  return s
+    ? `<img src="${s}" class="av ${cls}" style="object-fit:cover;border-radius:50%" onerror="this.outerHTML='<div class=&quot;av ${cls}&quot;>${l}</div>'">`
+    : `<div class="av ${cls}">${l}</div>`;
+}
+function timeAgo(d) {
+  if (!d) return '';
+  const s = Math.floor((Date.now() - new Date(d)) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+function toast(msg, dur = 3000) {
+  const el = document.getElementById('toast-el');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+function showModal(html) {
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'mbg';
+  bg.innerHTML = `<div class="modal"><button class="mclose" onclick="closeModal()">&#10005;</button>${html}</div>`;
+  bg.addEventListener('click', e => { if (e.target === bg) closeModal(); });
+  document.body.appendChild(bg);
+}
+function closeModal() { document.getElementById('mbg')?.remove(); }
+function updBadge(id, n) { const el = document.getElementById(id); if (!el) return; el.style.display = n > 0 ? 'block' : 'none'; el.textContent = n; }
+
+// ── NAV ───────────────────────────────────────────────────────────────────
+function go(page, extra) {
+  curPage = page;
+  const si = document.getElementById('gsrch'); if (si) si.value = '';
+  document.querySelectorAll('.nb[id^=nb-]').forEach(b => b.classList.remove('active'));
+  const nb = document.getElementById('nb-' + page); if (nb) nb.classList.add('active');
+  document.getElementById('pr').innerHTML = '<div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div>';
+  ({ home: renderHome, profile: renderProfile, network: renderNetwork, messaging: renderMessaging, notifications: renderNotifs, salary: renderSalary, reviews: renderReviews, experts: renderExperts, jobs: renderJobs }[page] || renderHome)(extra);
+}
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  api('/api/users/me', { method: 'PUT', body: JSON.stringify({ is_dark_mode: document.body.classList.contains('dark') ? 1 : 0 }) });
+}
+function initSocket() {
+  if (typeof io === 'undefined') return;
+  socket = io(); socket.emit('authenticate', token);
+  socket.on('message', () => { if (curPage !== 'messaging') updBadge('mbadge', 1); });
+  socket.on('notification', () => pollBadges());
+}
+async function pollBadges() {
+  const r = await api('/api/notifications/badges').catch(() => ({}));
+  if (r.unread_notifications > 0) updBadge('nbadge', r.unread_notifications); else updBadge('nbadge', 0);
+  if (r.unread_messages > 0) updBadge('mbadge', r.unread_messages); else updBadge('mbadge', 0);
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+function showAuth(m = 'login') {
+  document.getElementById('awrap').style.display = 'flex';
+  document.getElementById('appw').style.display = 'none';
+  renderAF(m);
+}
+function renderAF(m) {
+  const il = m === 'login';
+  document.getElementById('aform').innerHTML = `
+    <h2>${il ? 'Welcome back' : 'Join Nexus'}</h2>
+    <p class="asub">${il ? 'Sign in to your professional network' : 'Build your professional presence'}</p>
+    <div id="aerr"></div>
+    ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" placeholder="Your full name"></div>' : ''}
+    <div class="fg"><label>Email</label><input id="ae" type="email" placeholder="you@example.com"></div>
+    <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="Password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
+    ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" placeholder="e.g. Software Engineer at Google"></div>' : ''}
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
+    <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>`;
+}
+async function doAuth(m) {
+  const e = document.getElementById('ae')?.value.trim(), p = document.getElementById('ap')?.value;
+  const el = document.getElementById('aerr'); el.innerHTML = '';
+  if (!e || !p) { el.innerHTML = '<div class="err">Please fill all fields</div>'; return; }
+  let body = { email: e, password: p };
+  if (m === 'register') {
+    const n = document.getElementById('an')?.value.trim();
+    if (!n) { el.innerHTML = '<div class="err">Name required</div>'; return; }
+    body = { ...body, name: n, headline: document.getElementById('ah')?.value.trim() };
+  }
+  const r = await api('/api/auth/' + m, { method: 'POST', body: JSON.stringify(body) });
+  if (r.error) { el.innerHTML = `<div class="err">${r.error}</div>`; return; }
+  token = r.token; me = r.user; localStorage.setItem('nxtoken', token);
+  document.getElementById('awrap').style.display = 'none';
+  document.getElementById('appw').style.display = 'flex';
+  initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────
+let _srchTimer = null;
+function handleSearch(v) {
+  clearTimeout(_srchTimer);
+  if (!v.trim()) { if (curPage === 'search') go('home'); return; }
+  _srchTimer = setTimeout(() => renderSearch(v.trim()), 350);
+}
+async function renderSearch(q) {
+  curPage = 'search';
+  document.querySelectorAll('.nb[id^=nb-]').forEach(b => b.classList.remove('active'));
+  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="card cb"><p style="color:var(--sub);font-size:13px;margin:0">Searching for <strong>"${q}"</strong>…</p></div><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div>`;
+  const r = await api('/api/search?q=' + encodeURIComponent(q));
+  const users = r.users || [], posts = r.posts || [];
+  let html = '<div style="max-width:800px;margin:0 auto">';
+  if (!users.length && !posts.length) {
+    html += `<div class="card empty"><i class="fas fa-search"></i><h3>No results for &ldquo;${q}&rdquo;</h3><p>Try a name, company, headline, or keyword</p></div>`;
+  } else {
+    if (users.length) {
+      html += `<div class="card" style="margin-bottom:16px"><div class="ch">People <span class="chip chip-p">${users.length}</span></div>`;
+      html += users.map(u => {
+        const cs = u.connection_status, deg = u.degree || '3rd';
+        let btn = cs === 'accepted'
+          ? `<button class="btn btn-o btn-sm" onclick="go('messaging',${u.id})"><i class="fas fa-comment"></i> Message</button>`
+          : cs === 'pending'
+          ? `<button class="btn btn-g btn-sm" disabled>Pending</button>`
+          : `<button class="btn btn-p btn-sm" onclick="sendConn(${u.id},this)"><i class="fas fa-user-plus"></i> Connect</button>`;
+        return `<div class="prow">${av(u, 'av48')}<div class="pinfo"><h4><a href="#" onclick="go('profile',${u.id})" style="color:var(--text)">${u.name}</a> <span class="chip chip-p" style="font-size:10px;padding:2px 6px">${deg}°</span></h4><p>${u.headline || u.current_position || 'Nexus member'}</p>${u.location ? `<p style="font-size:11px;margin-top:3px"><i class="fas fa-location-dot"></i> ${u.location}</p>` : ''}</div>${btn}</div>`;
+      }).join('');
+      html += '</div>';
+    }
+    if (posts.length) {
+      html += `<div class="card"><div class="ch">Posts <span class="chip chip-p">${posts.length}</span></div>`;
+      html += posts.map(p => `<div style="padding:16px 20px;border-bottom:1px solid var(--border)">${p.author_id ? `<a href="#" onclick="go('profile',${p.author_id})" style="font-weight:700;font-size:13px;color:var(--text)">${p.author_name}</a>` : '<span class="anon-badge">Anonymous</span>'}<p style="margin:8px 0 6px;font-size:14px;line-height:1.5;color:var(--text)">${p.content.slice(0, 300)}${p.content.length > 300 ? '…' : ''}</p><span style="font-size:11px;color:var(--sub)"><i class="fas fa-heart"></i> ${p.likes_count} &nbsp;<i class="fas fa-comment"></i> ${p.comments_count} &nbsp;${timeAgo(p.created_at)}</span></div>`).join('');
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  document.getElementById('pr').innerHTML = html;
+}
+
+// ── HOME ──────────────────────────────────────────────────────────────────
+async function renderHome() {
+  document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="feed"></div></div></div>`;
+  renderSB(); renderComposer();
+  const posts = await api('/api/posts'); postsData = Array.isArray(posts) ? posts : [];
+  if (!postsData.length) {
+    document.getElementById('feed').innerHTML = `<div class="card empty"><i class="fas fa-newspaper"></i><h3 style="margin-bottom:8px">Your feed is empty</h3><p>Write your first post above, or <a href="#" onclick="go('network')" style="color:var(--primary);font-weight:600">connect with people</a> to see their updates.</p></div>`;
+  } else { renderFeed(postsData); }
+}
+function renderSB() {
+  const el = document.getElementById('sl'); if (!el || !me) return;
+  el.innerHTML = `<div class="card" style="position:sticky;top:76px">
+    <div class="sb-banner"><div class="sb-avwrap">${me.avatar_url ? `<img src="${me.avatar_url}" class="av av56" style="object-fit:cover;border:3px solid var(--card);border-radius:50%">` : `<div class="av av56" style="border:3px solid var(--card)">${me.name[0]}</div>`}</div></div>
+    <div class="sb-body"><h3><a href="#" onclick="go('profile')" style="color:var(--text);text-decoration:none">${me.name}</a></h3><p>${me.headline || 'Add a headline'}</p></div>
+    <div class="sb-stat"><span>Connections</span><span>${me.connections_count || 0}</span></div>
+    <div style="padding:12px 16px"><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-user"></i> View Profile</button></div>
+  </div>`;
+}
+let cmode = '';
+function renderComposer() {
+  const el = document.getElementById('ca'); if (!el) return;
+  el.innerHTML = `<div class="comp-wrap"><div class="comp-top">${av(me, 'av40')}<textarea id="ptxt" class="comp-ta" placeholder="What's on your mind? Share with your network…" rows="3"></textarea></div></div>
+  <div id="cext" class="comp-ext"></div>
+  <div class="comp-acts">
+    <button class="cbtn" id="cb-photo" onclick="tmode('photo')"><i class="fas fa-image" style="color:#3b82f6"></i> Photo</button>
+    <button class="cbtn" id="cb-poll" onclick="tmode('poll')"><i class="fas fa-chart-bar" style="color:#8b5cf6"></i> Poll</button>
+    <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i> Schedule</button>
+    <label class="anon-lbl"><input type="checkbox" id="anonchk"> Anonymous</label>
+    <button class="btn btn-p btn-sm" style="margin-left:8px" onclick="submitPost()">Post</button>
+  </div>`;
+}
+function tmode(m) {
+  const el = document.getElementById('cext');
+  if (cmode === m) { cmode = ''; el.innerHTML = ''; document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('on')); return; }
+  cmode = m; document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('on')); document.getElementById('cb-' + m)?.classList.add('on');
+  if (m === 'photo') el.innerHTML = `<div style="padding:0 16px 10px"><label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:2px dashed var(--border);border-radius:var(--r-sm);cursor:pointer;font-size:13px;color:var(--sub)"><i class="fas fa-upload"></i> Choose image <input type="file" id="phi" accept="image/*" style="display:none" onchange="this.parentElement.querySelectorAll('span').forEach(s=>s.remove());this.parentElement.insertAdjacentHTML('beforeend','<span style=color:var(--primary)>'+this.files[0].name+'</span>')"></label></div>`;
+  else if (m === 'poll') el.innerHTML = `<div style="padding:0 16px 10px"><div id="powr"><input class="popt" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px;margin-bottom:8px" placeholder="Option 1"><input class="popt" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px;margin-bottom:8px" placeholder="Option 2"></div><button onclick="addPO()" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;font-weight:600"><i class="fas fa-plus"></i> Add option</button></div>`;
+  else if (m === 'sched') { const d = new Date(); d.setHours(d.getHours() + 1); el.innerHTML = `<div style="padding:0 16px 10px;display:flex;align-items:center;gap:10px"><label style="font-size:13px;font-weight:700;color:var(--sub)">Publish at:</label><input type="datetime-local" id="schdt" value="${d.toISOString().slice(0, 16)}" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px"></div>`; }
+}
+function addPO() { const w = document.getElementById('powr'); if (!w || w.children.length >= 4) return; const i = document.createElement('input'); i.className = 'popt'; i.style.cssText = 'width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--inp);color:var(--text);font-size:13px;margin-bottom:8px'; i.placeholder = 'Option ' + (w.children.length + 1); w.appendChild(i); }
+async function submitPost() {
+  const txt = document.getElementById('ptxt')?.value.trim(); if (!txt) { toast('Write something first!'); return; }
+  const isAnon = document.getElementById('anonchk')?.checked || false;
+  const isPoll = cmode === 'poll'; const sched = cmode === 'sched' ? document.getElementById('schdt')?.value || null : null;
+  let opts = []; if (isPoll) { opts = [...document.querySelectorAll('.popt')].map(i => i.value.trim()).filter(Boolean); if (opts.length < 2) { toast('Add at least 2 poll options'); return; } }
+  let imgUrl = '';
+  if (cmode === 'photo') { const fi = document.getElementById('phi'); if (fi?.files[0]) { const fd = new FormData(); fd.append('file', fi.files[0]); const u = await fetch('/api/upload', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd }).then(r => r.json()); imgUrl = u.url || ''; } }
+  const body = { content: txt, is_anonymous: isAnon ? 1 : 0, image_url: imgUrl, is_poll: isPoll, poll_options: isPoll ? opts : [], scheduled_at: sched };
+  const res = await api('/api/posts', { method: 'POST', body: JSON.stringify(body) });
+  if (res.error) { toast('Error: ' + res.error); return; }
+  cmode = ''; document.getElementById('ptxt').value = ''; document.getElementById('cext').innerHTML = ''; document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('on')); document.getElementById('anonchk').checked = false;
+  if (!sched) { postsData.unshift(res); renderFeed(postsData); toast('Posted! 🎉'); } else toast('Scheduled! Will publish at ' + new Date(sched).toLocaleString());
+}
+
+// ── FEED ──────────────────────────────────────────────────────────────────
+function renderFeed(ps) {
+  const el = document.getElementById('feed'); if (!el) return;
+  if (!ps.length) { el.innerHTML = ''; return; }
+  el.innerHTML = ps.map(renderPost).join('');
+}
+function renderPost(p) {
+  const mine = p.author_id === me?.id;
+  let pollHtml = '';
+  if (p.poll_options?.length) {
+    const tot = p.poll_options.reduce((s, o) => s + (o.votes_count || 0), 0);
+    pollHtml = `<div style="padding:0 20px 12px">${p.poll_options.map(o => {
+      const pct = tot ? Math.round(o.votes_count / tot * 100) : 0;
+      const label = o.option_text || o.text || '';
+      return p.user_vote
+        ? `<div class="poll-opt"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${label}</span><strong>${pct}%</strong></div><div class="poll-bg"><div class="poll-bar" style="width:${pct}%"></div></div></div>`
+        : `<button class="poll-btn${p.user_vote === o.id ? ' voted' : ''}" onclick="votePoll(${p.id},${o.id})">${label}</button>`;
+    }).join('')}${tot ? `<p style="font-size:11px;color:var(--sub);margin-top:8px">${tot} vote${tot !== 1 ? 's' : ''}</p>` : ''}</div>`;
+  }
+  const isLiked = p.liked || p.user_liked;
+  return `<div class="card post" id="pc-${p.id}">
+    <div class="post-hdr">${av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<button onclick="delPost(${p.id})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}</div>
+    <div class="post-body">${p.content}</div>
+    ${p.image_url ? `<img src="${p.image_url}" class="post-img" loading="lazy">` : ''}
+    ${pollHtml}
+    <div class="post-acts">
+      <button class="pact${isLiked ? ' liked' : ''}" onclick="likePost(${p.id},this)"><i class="fa${isLiked ? 's' : 'r'} fa-heart"></i> ${p.likes_count || 0}</button>
+      <button class="pact" onclick="toggleComs(${p.id})"><i class="far fa-comment"></i> ${p.comments_count || 0}</button>
+      <button class="pact" onclick="sharePost(${p.id})"><i class="fas fa-share-nodes"></i> Share</button>
+    </div>
+    <div id="coms-${p.id}" style="display:none"></div>
+  </div>`;
+}
+async function likePost(id, btn) {
+  const liked = btn.classList.contains('liked');
+  const r = await api('/api/posts/' + id + '/like', { method: liked ? 'DELETE' : 'POST' });
+  btn.classList.toggle('liked', !liked);
+  btn.innerHTML = `<i class="fa${!liked ? 's' : 'r'} fa-heart"></i> ${r.likes_count || 0}`;
+}
+async function toggleComs(id) {
+  const el = document.getElementById('coms-' + id); if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block'; el.innerHTML = `<div class="ld" style="padding:16px"><i class="fas fa-circle-notch spin"></i></div>`;
+  const cs = await api('/api/posts/' + id + '/comments');
+  el.innerHTML = `<div class="coms-area">${Array.isArray(cs) ? cs.map(c => `<div class="com-row">${av({ name: c.author_name, avatar_url: c.author_avatar }, 'av40')}<div class="com-bub"><h5>${c.author_name}</h5><p>${c.content}</p></div></div>`).join('') : ''}<div class="com-inp">${av(me, 'av40')}<input id="ci-${id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')submitCom(${id})"><button class="btn btn-p btn-sm" onclick="submitCom(${id})">Post</button></div></div>`;
+}
+async function submitCom(id) {
+  const inp = document.getElementById('ci-' + id); const c = inp?.value.trim(); if (!c) return;
+  await api('/api/posts/' + id + '/comments', { method: 'POST', body: JSON.stringify({ content: c }) });
+  inp.value = '';
+  const res = await api('/api/posts/' + id + '/comments');
+  const area = document.querySelector('#coms-' + id + ' .coms-area');
+  if (area && Array.isArray(res)) { const iw = area.querySelector('.com-inp'); area.innerHTML = res.map(c => `<div class="com-row">${av({ name: c.author_name, avatar_url: c.author_avatar }, 'av40')}<div class="com-bub"><h5>${c.author_name}</h5><p>${c.content}</p></div></div>`).join(''); if (iw) area.appendChild(iw); }
+}
+async function votePoll(pid, oid) {
+  const res = await api('/api/posts/' + pid + '/poll/' + oid + '/vote', { method: 'POST' });
+  if (res.error) { toast(res.error); return; }
+  const idx = postsData.findIndex(p => p.id === pid);
+  if (idx >= 0) { postsData[idx].poll_options = res.options; postsData[idx].user_vote = oid; const el = document.getElementById('pc-' + pid); if (el) el.outerHTML = renderPost(postsData[idx]); }
+}
+async function delPost(id) { if (!confirm('Delete this post?')) return; await api('/api/posts/' + id, { method: 'DELETE' }); document.getElementById('pc-' + id)?.remove(); toast('Post deleted'); }
+function sharePost(id) { const url = window.location.origin + '?post=' + id; navigator.clipboard?.writeText(url).then(() => toast('Link copied!')).catch(() => toast('Share: ' + url)); }
+
+// ── PROFILE ───────────────────────────────────────────────────────────────
+async function renderProfile(uid) {
+  const isMe = !uid || uid == me?.id;
+  const d = await api(isMe ? '/api/users/me' : '/api/users/' + uid);
+  if (d.error) { document.getElementById('pr').innerHTML = '<div class="card empty"><i class="fas fa-user-slash"></i><p>User not found</p></div>'; return; }
+  const cs = d.connectionStatus;
+  const connBtn = isMe ? '' : cs === 'accepted'
+    ? `<button class="btn btn-o" onclick="go('messaging',${d.id})"><i class="fas fa-comment"></i> Message</button><button class="btn btn-g btn-sm" onclick="removeConn(${d.id})">Connected ✓</button>`
+    : cs === 'pending'
+    ? '<button class="btn btn-g" disabled>Pending</button>'
+    : `<button class="btn btn-p" onclick="sendConn(${d.id},this)"><i class="fas fa-user-plus"></i> Connect</button>`;
+  document.getElementById('pr').innerHTML = `<div style="max-width:760px;margin:0 auto">
+    <div class="card" style="overflow:hidden">
+      <div class="prof-banner">${d.banner_url ? `<img src="${d.banner_url}" style="width:100%;height:100%;object-fit:cover">` : ''}${isMe ? `<label style="position:absolute;bottom:10px;right:14px;cursor:pointer;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);padding:6px 12px;border-radius:8px;color:#fff;font-size:12px;font-weight:700"><i class="fas fa-camera"></i> Banner<input type="file" accept="image/*" style="display:none" onchange="uploadFile(this,'banner')"></label>` : ''}</div>
+      <div class="prof-avwrap">${d.avatar_url ? `<img src="${d.avatar_url}" class="av av80" style="object-fit:cover;border:4px solid var(--card);border-radius:50%">` : `<div class="av av80" style="border:4px solid var(--card)">${d.name[0]}</div>`}${isMe ? `<label style="position:absolute;bottom:0;right:0;width:24px;height:24px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fas fa-camera" style="color:#fff;font-size:11px"></i><input type="file" accept="image/*" style="display:none" onchange="uploadFile(this,'avatar')"></label>` : ''}</div>
+      <div class="prof-body">
+        <h1>${d.name}</h1>
+        <p class="ph">${d.headline || ''}</p>
+        ${d.location ? `<p style="font-size:13px;color:var(--sub)"><i class="fas fa-location-dot"></i> ${d.location}</p>` : ''}
+        <p style="font-size:13px;color:var(--sub)"><i class="fas fa-users"></i> ${d.connections_count || 0} connections</p>
+        <div class="prof-actions">
+          ${isMe ? '<button class="btn btn-p" onclick="editProfile()"><i class="fas fa-pen"></i> Edit Profile</button>' : connBtn}
+          ${isMe ? '<button class="btn btn-o" onclick="go(\'messaging\')"><i class="fas fa-comment-dots"></i> Messages</button>' : ''}
+        </div>
+        ${d.about ? `<div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)"><h3 style="font-size:15px;font-weight:800;margin:0 0 10px">About</h3><p style="font-size:14px;line-height:1.6;color:var(--sub)">${d.about}</p></div>` : ''}
+      </div>
+    </div>
+    ${d.experiences?.length ? `<div class="card"><div class="ch">Experience ${isMe ? '<button class="btn btn-o btn-sm" style="margin-left:auto" onclick="addExp()"><i class="fas fa-plus"></i> Add</button>' : ''}</div><div class="cb">${d.experiences.map(x => `<div class="exp-row"><div class="exp-ico"><i class="fas fa-briefcase"></i></div><div><h4 style="font-size:14px;font-weight:700;margin:0 0 2px">${x.role}</h4><p style="color:var(--sub);font-size:13px;margin:0">${x.company} &bull; ${x.start_date || ''}${x.is_current ? ' – Present' : x.end_date ? ' – ' + x.end_date : ''}</p>${x.description ? `<p style="font-size:13px;margin-top:6px;line-height:1.5;color:var(--text)">${x.description}</p>` : ''}</div></div>`).join('')}</div></div>` : isMe ? `<div class="card"><div class="ch">Experience <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="addExp()"><i class="fas fa-plus"></i> Add</button></div><div class="empty" style="padding:28px"><i class="fas fa-briefcase" style="font-size:32px"></i><p>Add your work history</p></div></div>` : ''}
+    ${d.education?.length ? `<div class="card"><div class="ch">Education ${isMe ? '<button class="btn btn-o btn-sm" style="margin-left:auto" onclick="addEdu()"><i class="fas fa-plus"></i> Add</button>' : ''}</div><div class="cb">${d.education.map(x => `<div class="exp-row"><div class="exp-ico"><i class="fas fa-graduation-cap"></i></div><div><h4 style="font-size:14px;font-weight:700;margin:0 0 2px">${x.school}</h4><p style="color:var(--sub);font-size:13px;margin:0">${x.degree || ''} ${x.start_year ? x.start_year + '–' + (x.end_year || 'Present') : ''}</p></div></div>`).join('')}</div></div>` : isMe ? `<div class="card"><div class="ch">Education <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="addEdu()"><i class="fas fa-plus"></i> Add</button></div><div class="empty" style="padding:28px"><i class="fas fa-graduation-cap" style="font-size:32px"></i><p>Add your education</p></div></div>` : ''}
+    ${d.skills?.length ? `<div class="card"><div class="ch">Skills</div><div class="cb" style="display:flex;flex-wrap:wrap;gap:8px">${d.skills.map(s => `<span class="chip chip-p" style="padding:6px 14px;font-size:12px">${s}</span>`).join('')}${isMe ? '<button class="btn btn-o btn-sm" onclick="addSkill()"><i class="fas fa-plus"></i> Add</button>' : ''}</div></div>` : isMe ? `<div class="card"><div class="ch">Skills</div><div class="empty" style="padding:24px"><i class="fas fa-tools" style="font-size:32px"></i><p>Add skills to your profile</p><button class="btn btn-o btn-sm" style="margin-top:10px" onclick="addSkill()"><i class="fas fa-plus"></i> Add Skill</button></div></div>` : ''}
+  </div>`;
+}
+function editProfile() {
+  showModal(`<h2 style="margin-bottom:16px">Edit Profile</h2>
+    <div class="fg"><label>Name</label><input id="epn" value="${me.name || ''}"></div>
+    <div class="fg"><label>Headline</label><input id="eph" value="${me.headline || ''}"></div>
+    <div class="fg"><label>Location</label><input id="epl" value="${me.location || ''}"></div>
+    <div class="fg"><label>Current Position</label><input id="epcp" value="${me.current_position || ''}"></div>
+    <div class="fg"><label>About</label><textarea id="epa" rows="4">${me.about || ''}</textarea></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveProfile()"><i class="fas fa-check"></i> Save</button>`);
+}
+async function saveProfile() {
+  const b = { name: document.getElementById('epn').value, headline: document.getElementById('eph').value, location: document.getElementById('epl').value, current_position: document.getElementById('epcp').value, about: document.getElementById('epa').value };
+  await api('/api/users/me', { method: 'PUT', body: JSON.stringify(b) }); me = { ...me, ...b }; closeModal(); renderProfile(); toast('Profile updated!');
+}
+async function uploadFile(inp, type) {
+  const fd = new FormData(); fd.append('file', inp.files[0]); fd.append('type', type);
+  const r = await fetch('/api/upload', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd }).then(r => r.json());
+  if (type === 'avatar') me.avatar_url = r.url;
+  if (type === 'banner') me.banner_url = r.url;
+  renderProfile(); toast('Photo updated!');
+}
+function addExp() {
+  showModal(`<h2 style="margin-bottom:16px">Add Experience</h2>
+    <div class="frow"><div class="fg"><label>Company *</label><input id="xco"></div><div class="fg"><label>Role *</label><input id="xro"></div></div>
+    <div class="frow"><div class="fg"><label>Start Date</label><input id="xsd" type="month"></div><div class="fg"><label>End Date</label><input id="xed" type="month"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px"><input type="checkbox" id="xcur"> Currently working here</label>
+    <div class="fg"><label>Description</label><textarea id="xde" rows="3"></textarea></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveExp()">Add</button>`);
+}
+async function saveExp() {
+  const b = { company: document.getElementById('xco').value, role: document.getElementById('xro').value, start_date: document.getElementById('xsd').value, end_date: document.getElementById('xed').value, is_current: document.getElementById('xcur').checked ? 1 : 0, description: document.getElementById('xde').value };
+  if (!b.company || !b.role) { toast('Company and role required'); return; }
+  await api('/api/users/me/experience', { method: 'POST', body: JSON.stringify(b) }); closeModal(); renderProfile(); toast('Experience added!');
+}
+function addEdu() {
+  showModal(`<h2 style="margin-bottom:16px">Add Education</h2>
+    <div class="fg"><label>School *</label><input id="esc"></div>
+    <div class="fg"><label>Degree</label><input id="edg"></div>
+    <div class="frow"><div class="fg"><label>Start Year</label><input id="esy" type="number" placeholder="2018"></div><div class="fg"><label>End Year</label><input id="eey" type="number" placeholder="2022"></div></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveEdu()">Add</button>`);
+}
+async function saveEdu() {
+  const b = { school: document.getElementById('esc').value, degree: document.getElementById('edg').value, start_year: document.getElementById('esy').value, end_year: document.getElementById('eey').value };
+  if (!b.school) { toast('School required'); return; }
+  await api('/api/users/me/education', { method: 'POST', body: JSON.stringify(b) }); closeModal(); renderProfile(); toast('Education added!');
+}
+function addSkill() {
+  showModal(`<h2 style="margin-bottom:16px">Add Skill</h2>
+    <div class="fg"><label>Skill Name</label><input id="skn" placeholder="e.g. React, Python, Leadership"></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:8px" onclick="saveSkill()">Add</button>`);
+}
+async function saveSkill() {
+  const name = document.getElementById('skn').value.trim(); if (!name) return;
+  await api('/api/users/me/skills', { method: 'POST', body: JSON.stringify({ name }) }); closeModal(); renderProfile(); toast('Skill added!');
+}
+async function removeConn(id) { if (!confirm('Remove connection?')) return; await api('/api/connections/' + id, { method: 'DELETE' }); renderProfile(id); toast('Connection removed'); }
+
+// ── NETWORK ───────────────────────────────────────────────────────────────
+async function renderNetwork() {
+  const [co, rq, sg] = await Promise.all([api('/api/connections'), api('/api/connections/requests'), api('/api/connections/suggestions')]);
+  const sugHtml = Array.isArray(sg) && sg.length
+    ? sg.map(s => `<div class="sug-card">${av(s, 'av56')}<div style="margin:6px 0 4px"><span class="chip chip-p" style="font-size:10px;padding:2px 7px">${s.degree || '3rd'}°</span>${s.mutual_count > 0 ? ` <span style="font-size:11px;color:var(--sub)">${s.mutual_count} mutual</span>` : ''}</div><h4>${s.name}</h4><p>${s.headline || s.current_position || 'Nexus member'}</p><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="sendConn(${s.id},this)"><i class="fas fa-user-plus"></i> Connect</button></div>`).join('')
+    : `<div style="text-align:center;padding:32px;color:var(--sub);grid-column:1/-1"><i class="fas fa-users" style="font-size:40px;opacity:.2;display:block;margin-bottom:12px"></i><p style="font-weight:600;margin-bottom:6px">No suggestions yet</p><p style="font-size:13px">Use the <strong>search bar</strong> to find people by name, company, or headline.</p></div>`;
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
+    ${Array.isArray(rq) && rq.length ? `<div class="card" style="margin-bottom:16px"><div class="ch">Invitations <span class="chip chip-p">${rq.length}</span></div>${rq.map(r => `<div class="prow">${av(r, 'av48')}<div class="pinfo"><h4>${r.name}</h4><p>${r.headline || ''}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(r.created_at)}</time></div><button class="btn btn-p btn-sm" onclick="actConn(${r.connection_id},'accept',this)">Accept</button><button class="btn btn-o btn-sm" style="margin-left:6px" onclick="actConn(${r.connection_id},'decline',this)">Decline</button></div>`).join('')}</div>` : ''}
+    <div class="card" style="margin-bottom:16px"><div class="ch">People you may know <span style="font-size:12px;color:var(--sub);font-weight:400">2nd &amp; 3rd degree</span></div><div class="cb"><div class="sug-grid">${sugHtml}</div></div></div>
+    ${Array.isArray(co) && co.length ? `<div class="card"><div class="ch">Your Connections <span class="chip chip-p">${co.length}</span></div>${co.map(c => `<div class="prow">${av(c, 'av48')}<div class="pinfo"><h4><a href="#" onclick="go('profile',${c.id})" style="color:var(--text);text-decoration:none">${c.name}</a></h4><p>${c.headline || c.current_position || ''}</p></div><div style="display:flex;gap:6px"><button class="btn btn-o btn-sm" onclick="go('profile',${c.id})">Profile</button><button class="btn btn-p btn-sm" onclick="go('messaging',${c.id})"><i class="fas fa-comment"></i> Message</button></div></div>`).join('')}</div>` : `<div class="card"><div class="ch">Your Connections</div><div class="empty" style="padding:40px"><i class="fas fa-user-plus" style="font-size:40px"></i><p>No connections yet</p><p style="font-size:13px;margin-top:6px">Search for people above or explore suggestions</p></div></div>`}
+  </div>`;
+}
+async function sendConn(id, btn) {
+  const r = await api('/api/connections/' + id, { method: 'POST' });
+  if (r.error) { toast(r.error); return; }
+  if (btn) { btn.textContent = 'Pending'; btn.disabled = true; btn.className = 'btn btn-g btn-sm'; }
+  toast('Request sent!');
+}
+async function actConn(id, action, btn) {
+  await api('/api/connections/' + id, { method: 'PUT', body: JSON.stringify({ action }) });
+  btn.closest('.prow')?.remove(); toast(action === 'accept' ? '🎉 Connected!' : 'Declined');
+  if (action === 'accept') { me.connections_count = (me.connections_count || 0) + 1; renderSB(); }
+}
+
+// ── MESSAGING ─────────────────────────────────────────────────────────────
+let achat = null;
+async function renderMessaging(pre) {
+  document.getElementById('pr').innerHTML = `<div id="mlay"><div class="mlist"><div class="mhdr">Messages <button class="btn btn-p btn-sm" style="margin-left:auto;padding:4px 10px" onclick="showNewMsg()" title="New message"><i class="fas fa-edit"></i></button></div><div id="ml"><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div></div><div id="ccol"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--sub);text-align:center;padding:20px"><i class="fas fa-comment-dots" style="font-size:56px;opacity:.2;margin-bottom:16px"></i><p style="font-size:16px;font-weight:700;margin-bottom:8px">Your Messages</p><p style="font-size:13px">Select a conversation or click ✏️ to start one</p></div></div></div>`;
+  const th = await api('/api/messages/threads'); const ml = document.getElementById('ml'); if (!ml) return;
+  if (!Array.isArray(th) || !th.length) {
+    ml.innerHTML = `<div style="padding:28px 20px;text-align:center;color:var(--sub)"><i class="fas fa-comment-slash" style="font-size:32px;opacity:.2;margin-bottom:10px"></i><p style="font-size:13px;font-weight:600">No conversations yet</p><p style="font-size:12px;margin-top:6px">Connect with people, then message them</p></div>`;
+  } else {
+    ml.innerHTML = th.map(t => `<div class="mthread" id="mt-${t.id}" onclick="openChat(${t.id},'${t.name.replace(/'/g, '&apos;')}')">${av(t, 'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message || 'Start a conversation'}</p></div>${t.unread_count > 0 ? '<div class="udot"></div>' : ''}</div>`).join('');
+  }
+  if (pre) openChat(pre);
+}
+async function showNewMsg() {
+  const conns = await api('/api/connections');
+  if (!Array.isArray(conns) || !conns.length) { toast('Connect with people first!'); return; }
+  showModal(`<h2 style="margin-bottom:16px">New Message</h2><input id="msrch" placeholder="Search connections…" oninput="filterMsgConns()" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:12px"><div id="mconns" style="max-height:340px;overflow-y:auto">${conns.map(c => `<div class="prow mconn-row" style="cursor:pointer;border-radius:var(--r-sm)" onclick="closeModal();setTimeout(()=>go('messaging',${c.id}),100)">${av(c, 'av40')}<div class="pinfo"><h4>${c.name}</h4><p>${c.headline || c.current_position || ''}</p></div></div>`).join('')}</div>`);
+}
+function filterMsgConns() { const q = document.getElementById('msrch')?.value.toLowerCase(); document.querySelectorAll('.mconn-row').forEach(r => { r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
+async function openChat(uid, name) {
+  achat = uid;
+  document.querySelectorAll('.mthread').forEach(e => e.classList.remove('active'));
+  document.getElementById('mt-' + uid)?.classList.add('active');
+  if (socket) socket.emit('join_chat', uid);
+  const [info, msgs] = await Promise.all([api('/api/users/' + uid).catch(() => ({ name: name || 'User' })), api('/api/messages/' + uid)]);
+  const col = document.getElementById('ccol'); if (!col) return;
+  col.innerHTML = `<div id="ctop">${av(info, 'av40')}<div><h3>${info.name || name}</h3><p>${info.headline || ''}</p></div><button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button></div>
+    <div id="cmsgs">${(Array.isArray(msgs) ? msgs : []).map(m => `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`).join('')}</div>
+    <div id="typind">typing…</div>
+    <div id="cinp"><input id="cinput" placeholder="Write a message…" onkeydown="if(event.key==='Enter')sendMsg();else emitTyp()"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
+  const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
+  if (socket) {
+    socket.off('message'); socket.on('message', m => { if (m.sender_id == uid || m.receiver_id == uid) { const mb = document.getElementById('cmsgs'); if (mb) { mb.innerHTML += `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`; mb.scrollTop = mb.scrollHeight; } } });
+    socket.off('typing'); socket.on('typing', ({ from }) => { if (from == uid) { const ti = document.getElementById('typind'); if (ti) { ti.style.display = 'block'; clearTimeout(window._tt); window._tt = setTimeout(() => ti.style.display = 'none', 2000); } } });
+  }
+}
+function emitTyp() { if (socket && achat) socket.emit('typing', { to: achat }); }
+async function sendMsg() {
+  const inp = document.getElementById('cinput'); const c = inp?.value.trim(); if (!c || !achat) return;
+  inp.value = '';
+  await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────────────
+async function renderNotifs() {
+  const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
+  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${x.content}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
+}
+
+// ── SALARY BOARD ──────────────────────────────────────────────────────────
+async function renderSalary() {
+  const d = await api('/api/salary');
+  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>💰 Salary Board</h1><button class="btn btn-p" onclick="showSalForm()"><i class="fas fa-plus"></i> Share Salary</button></div>
+    ${Array.isArray(d) && d.length ? d.map(s => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${s.role}</h3><p style="color:var(--sub);font-size:13px;margin:0">${s.company}${s.city ? ' · ' + s.city : ''}</p></div><div style="text-align:right"><p style="font-size:20px;font-weight:800;color:var(--primary);margin:0">₹${s.salary_lpa}L</p><p style="font-size:11px;color:var(--sub);margin:0">per annum</p></div></div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><span class="chip chip-p">${s.experience_years}y exp</span>${s.tech_stack ? `<span class="chip" style="background:var(--inp);color:var(--sub)">${s.tech_stack}</span>` : ''}${s.is_anonymous ? '<span class="chip" style="background:#f3f4f6;color:#6b7280">Anonymous</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-coins" style="font-size:40px"></i><p>No salaries shared yet — be the first!</p></div>'}
+  </div>`;
+}
+function showSalForm() {
+  showModal(`<h2 style="margin-bottom:16px">Share Your Salary</h2>
+    <div class="frow"><div class="fg"><label>Company *</label><input id="slco"></div><div class="fg"><label>Role *</label><input id="slro"></div></div>
+    <div class="frow"><div class="fg"><label>Salary (LPA) *</label><input id="slsa" type="number" placeholder="12.5"></div><div class="fg"><label>Experience (yrs)</label><input id="slexp" type="number" placeholder="3"></div></div>
+    <div class="frow"><div class="fg"><label>City</label><input id="slci" placeholder="Bangalore"></div><div class="fg"><label>Tech Stack</label><input id="slst" placeholder="React, Node"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px"><input type="checkbox" id="slan"> Share anonymously</label>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveSal()"><i class="fas fa-share"></i> Share</button>`);
+}
+async function saveSal() {
+  const b = { company: document.getElementById('slco').value, role: document.getElementById('slro').value, salary_lpa: parseFloat(document.getElementById('slsa').value), experience_years: parseInt(document.getElementById('slexp').value) || 0, city: document.getElementById('slci').value, tech_stack: document.getElementById('slst').value, is_anonymous: document.getElementById('slan').checked };
+  if (!b.company || !b.role || !b.salary_lpa) { toast('Required fields missing'); return; }
+  await api('/api/salary', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Salary shared! 🙏'); renderSalary();
+}
+
+// ── REVIEWS ───────────────────────────────────────────────────────────────
+async function renderReviews() {
+  const d = await api('/api/reviews');
+  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>⭐ Company Reviews</h1><button class="btn btn-p" onclick="showRevForm()"><i class="fas fa-plus"></i> Write Review</button></div>
+    ${Array.isArray(d) && d.length ? d.map(r => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${r.company}</h3><p style="font-size:13px;color:var(--sub);margin:0">${r.title || ''}</p></div><div style="text-align:right"><div class="stars">${'★'.repeat(r.overall_rating)}${'☆'.repeat(5 - r.overall_rating)}</div><p style="font-size:12px;color:var(--sub);margin:4px 0 0">${r.is_anonymous ? 'Anonymous' : 'Verified'}</p></div></div>${r.pros ? `<div style="margin-top:12px"><p style="font-size:12px;color:#16a34a;font-weight:700;margin:0 0 3px">👍 Pros</p><p style="font-size:13px;margin:0">${r.pros}</p></div>` : ''}${r.cons ? `<div style="margin-top:8px"><p style="font-size:12px;color:#dc2626;font-weight:700;margin:0 0 3px">👎 Cons</p><p style="font-size:13px;margin:0">${r.cons}</p></div>` : ''}<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${r.work_life_balance ? `<span class="chip" style="background:var(--inp);color:var(--sub)">WLB: ${r.work_life_balance}/5</span>` : ''}${r.culture ? `<span class="chip" style="background:var(--inp);color:var(--sub)">Culture: ${r.culture}/5</span>` : ''}${r.would_recommend ? '<span class="chip" style="background:#dcfce7;color:#16a34a">Recommends</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-building" style="font-size:40px"></i><p>No reviews yet — share your experience!</p></div>'}
+  </div>`;
+}
+function showRevForm() {
+  showModal(`<h2 style="margin-bottom:16px">Write a Review</h2>
+    <div class="fg"><label>Company *</label><input id="rvco"></div>
+    <div class="fg"><label>Rating *</label><select id="rvrat"><option value="">Select…</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>
+    <div class="fg"><label>Title</label><input id="rvti" placeholder="e.g. Great place to grow"></div>
+    <div class="fg"><label>Pros</label><textarea id="rvpro" rows="2" placeholder="What's great about working here?"></textarea></div>
+    <div class="fg"><label>Cons</label><textarea id="rvcon" rows="2" placeholder="What could be better?"></textarea></div>
+    <div class="frow"><div class="fg"><label>Work-Life Balance /5</label><input id="rvwlb" type="number" min="1" max="5"></div><div class="fg"><label>Culture /5</label><input id="rvcul" type="number" min="1" max="5"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px"><input type="checkbox" id="rvrec"> Would recommend</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px"><input type="checkbox" id="rvan"> Anonymous</label>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveRev()"><i class="fas fa-check"></i> Submit Review</button>`);
+}
+async function saveRev() {
+  const r = parseInt(document.getElementById('rvrat').value); if (!r) { toast('Select a rating'); return; }
+  const b = { company: document.getElementById('rvco').value, overall_rating: r, title: document.getElementById('rvti').value, pros: document.getElementById('rvpro').value, cons: document.getElementById('rvcon').value, work_life_balance: document.getElementById('rvwlb').value, culture: document.getElementById('rvcul').value, would_recommend: document.getElementById('rvrec').checked, is_anonymous: document.getElementById('rvan').checked };
+  if (!b.company) { toast('Company required'); return; }
+  await api('/api/reviews', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Review submitted! 🙏'); renderReviews();
+}
+
+// ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
+async function renderExperts() {
+  const d = await api('/api/experts');
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto"><div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
+    ${Array.isArray(d) && d.length ? `<div class="sug-grid">${d.map(e => { const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || ''); return `<div class="card" style="padding:20px;text-align:center">${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}<h4 style="margin:10px 0 4px">${e.name || 'Mentor'}</h4><p style="font-size:12px;color:var(--sub);margin:0 0 4px">${e.headline || ''}</p><p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 8px">${expertiseStr}</p><p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 12px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub)">/session</span></p><a href="${e.booking_url || '#'}" target="_blank" class="btn btn-p btn-sm" style="width:100%;justify-content:center"><i class="fas fa-video"></i> Book Session</a></div>`; }).join('')}</div>` : '<div class="card empty"><i class="fas fa-chalkboard-teacher" style="font-size:40px"></i><p>No mentors yet — be the first to offer!</p></div>'}
+  </div>`;
+}
+function showExpertForm() {
+  showModal(`<h2 style="margin-bottom:16px">Offer Mentoring</h2>
+    <div class="fg"><label>Expertise</label><input id="exex" placeholder="e.g. System Design, React, DSA"></div>
+    <div class="fg"><label>Price per session (₹)</label><input id="expr" type="number" placeholder="500"></div>
+    <div class="fg"><label>Bio / Description</label><textarea id="exbi" rows="3"></textarea></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveExpert()"><i class="fas fa-check"></i> Submit</button>`);
+}
+async function saveExpert() {
+  const b = { expertise: document.getElementById('exex').value, price_per_session: parseInt(document.getElementById('expr').value) || 0, bio: document.getElementById('exbi').value };
+  if (!b.expertise) { toast('Expertise required'); return; }
+  const jitsi = `https://meet.jit.si/Nexus-${Date.now()}`;
+  await api('/api/experts', { method: 'POST', body: JSON.stringify({ ...b, booking_url: jitsi }) }); closeModal(); toast('Profile submitted! 🎓'); renderExperts();
+}
+
+// ── JOBS ──────────────────────────────────────────────────────────────────
+async function renderJobs() {
+  const j = await api('/api/jobs');
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto"><div class="phdr"><h1>💼 Jobs</h1><button class="btn btn-p" onclick="showPostJob()"><i class="fas fa-plus"></i> Post Job</button></div>
+    <div class="card cb" style="margin-bottom:16px"><div class="frow2"><input id="jq" placeholder="Search jobs, companies…" oninput="filJobs()"><select id="jt" onchange="filJobs()"><option value="">All types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
+    <div id="jlist">${rJobList(Array.isArray(j) ? j : [])}</div>`;
+  window._jd = Array.isArray(j) ? j : [];
+}
+function rJobList(d) {
+  if (!d.length) return '<div class="card empty"><i class="fas fa-briefcase" style="font-size:40px"></i><p>No jobs found</p></div>';
+  return d.map(j => `<div class="card"><div class="ji"><div class="fb" style="margin-bottom:8px"><div><h3>${j.title}</h3><p class="jco">${j.company}</p></div>${j.poster_avatar ? `<img src="${j.poster_avatar}" class="av av48" style="object-fit:cover;border-radius:50%">` : av({ name: j.poster_name }, 'av48')}</div><div class="jmeta"><span><i class="fas fa-location-dot"></i>${j.location || 'Not specified'}</span><span><i class="fas fa-clock"></i>${j.job_type}</span>${j.salary_range ? `<span><i class="fas fa-indian-rupee-sign"></i>${j.salary_range}</span>` : ''}<span><i class="fas fa-users"></i>${j.applications_count} applicants</span><span><i class="fas fa-calendar"></i>${timeAgo(j.created_at)}</span></div>${j.description ? `<p class="jdesc">${j.description.slice(0, 200)}${j.description.length > 200 ? '…' : ''}</p>` : ''}<div style="display:flex;gap:8px;margin-top:12px">${j.applied ? '<button class="btn btn-g btn-sm" disabled><i class="fas fa-check"></i> Applied</button>' : `<button class="btn btn-p btn-sm" onclick="showApply(${j.id},'${j.title.replace(/'/g, '&apos;')}')"><i class="fas fa-paper-plane"></i> Easy Apply</button>`}<button class="btn btn-o btn-sm" onclick="this.innerHTML='<i class=&quot;fas fa-bookmark&quot;></i> Saved';toast('Saved!')"><i class="far fa-bookmark"></i> Save</button></div></div></div>`).join('');
+}
+function filJobs() { const q = document.getElementById('jq').value.toLowerCase(); const t = document.getElementById('jt').value; document.getElementById('jlist').innerHTML = rJobList((window._jd || []).filter(j => (!q || (j.title + j.company + (j.description || '')).toLowerCase().includes(q)) && (!t || j.job_type === t))); }
+function showApply(id, title) {
+  showModal(`<h2 style="margin-bottom:16px">Apply: ${title}</h2><div class="fg"><label>Cover Letter (optional)</label><textarea id="cltxt" rows="5" placeholder="Why are you a great fit?"></textarea></div><button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="applyJob(${id})"><i class="fas fa-paper-plane"></i> Submit Application</button>`);
+}
+async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } closeModal(); toast('Applied! 🎉'); renderJobs(); }
+function showPostJob() {
+  showModal(`<h2 style="margin-bottom:16px">Post a Job</h2>
+    <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Engineer"></div><div class="fg"><label>Company *</label><input id="pjco" placeholder="Company name"></div></div>
+    <div class="frow"><div class="fg"><label>Location</label><input id="pjlo" placeholder="City or Remote"></div><div class="fg"><label>Type</label><select id="pjty"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
+    <div class="fg"><label>Salary Range</label><input id="pjsa" placeholder="12-18 LPA"></div>
+    <div class="fg"><label>Description</label><textarea id="pjde" rows="4" placeholder="Describe the role…"></textarea></div>
+    <div class="fg"><label>Requirements</label><textarea id="pjre" rows="3" placeholder="Skills and qualifications…"></textarea></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveJob()"><i class="fas fa-check"></i> Post Job</button>`);
+}
+async function saveJob() {
+  const b = { title: document.getElementById('pjti').value, company: document.getElementById('pjco').value, location: document.getElementById('pjlo').value, job_type: document.getElementById('pjty').value, salary_range: document.getElementById('pjsa').value, description: document.getElementById('pjde').value, requirements: document.getElementById('pjre').value };
+  if (!b.title || !b.company) { toast('Title and company required'); return; }
+  await api('/api/jobs', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Job posted!'); renderJobs();
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+(async () => {
+  const saved = localStorage.getItem('nxtoken');
+  if (saved) {
+    token = saved;
+    try {
+      me = await api('/api/users/me');
+      if (me && me.id) {
+        document.getElementById('awrap').style.display = 'none';
+        document.getElementById('appw').style.display = 'flex';
+        if (me.is_dark_mode) document.body.classList.add('dark');
+        initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+      } else { localStorage.removeItem('nxtoken'); showAuth(); }
+    } catch { localStorage.removeItem('nxtoken'); showAuth(); }
+  } else { showAuth(); }
+})();
+</script>
+</body>
+</html>
