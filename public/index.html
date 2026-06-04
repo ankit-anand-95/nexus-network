@@ -168,14 +168,30 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 #ctop h3{font-size:15px;font-weight:700;margin:0}
 #ctop p{font-size:12px;color:var(--sub);margin:0}
 #cmsgs{flex:1;min-height:0;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
-.bub{max-width:65%;padding:11px 16px;border-radius:18px;font-size:14px;line-height:1.5;position:relative}
-.bub time{display:block;font-size:10px;opacity:.6;margin-top:4px}
+.bub{max-width:65%;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
+.bub .bub-foot{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:3px}
+.bub time{font-size:10px;opacity:.6}
 .bub.mine{background:var(--primary);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
 .bub.theirs{background:var(--inp);color:var(--text);align-self:flex-start;border-bottom-left-radius:4px}
-#typind{padding:4px 20px;font-size:12px;color:var(--sub);font-style:italic;display:none;flex-shrink:0}
-#cinp{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border);flex-shrink:0}
-#cinp input{flex:1;padding:11px 16px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:14px}
+.tick{font-size:10px;color:rgba(255,255,255,.55)}
+.tick.sent{color:rgba(255,255,255,.55)}
+.tick.delivered{color:rgba(255,255,255,.85)}
+.tick.read{color:#93c5fd}
+/* Typing indicator */
+#typind{padding:6px 20px;font-size:12px;color:var(--sub);display:none;align-items:center;gap:6px;flex-shrink:0}
+.tdots{display:flex;gap:4px;align-items:center}
+.tdots span{width:7px;height:7px;border-radius:50%;background:var(--sub);animation:tdot 1.2s ease-in-out infinite}
+.tdots span:nth-child(2){animation-delay:.2s}
+.tdots span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+/* Online presence */
+.pres-wrap{position:relative;display:inline-block;flex-shrink:0}
+.pres-dot{position:absolute;bottom:1px;right:1px;width:10px;height:10px;background:#22c55e;border-radius:50%;border:2px solid var(--card);display:none}
+.pres-wrap.online .pres-dot{display:block}
+#cinp{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border);flex-shrink:0;align-items:center}
+#cinp input{flex:1;padding:11px 16px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:14px;transition:border .15s}
 #cinp input:focus{outline:none;border-color:var(--primary)}
+#cinp button{width:42px;height:42px;border-radius:50%;flex-shrink:0}
 
 /* AVATAR */
 .av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
@@ -373,36 +389,85 @@ function logout() {
 }
 function initSocket() {
   if (typeof io === 'undefined') return;
-  socket = io(); socket.emit('authenticate', token);
+  if (socket) { try { socket.removeAllListeners(); socket.disconnect(); } catch(e){} socket = null; }
+  socket = io({ reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000, reconnectionDelayMax: 8000, timeout: 10000 });
 
-  socket.on('message', (m) => {
-    // Only handle badge/toast here when NOT in messaging (chat openChat overrides this handler)
-    if (curPage !== 'messaging' && m && m.sender_id != me?.id) {
+  socket.on('connect', () => { socket.emit('authenticate', token); });
+  socket.emit('authenticate', token);
+
+  // ── SINGLE persistent message handler ────────────────────────────────────
+  socket.on('message', m => {
+    if (!m || m.sender_id == me?.id) return; // ignore echoes of own messages
+    const mb = document.getElementById('cmsgs');
+    if (curPage === 'messaging' && achat == m.sender_id && mb) {
+      // Chat with this person is open — append immediately
+      if (!mb.querySelector('[data-mid="' + m.id + '"]')) {
+        const div = document.createElement('div');
+        div.className = 'bub theirs'; div.setAttribute('data-mid', m.id);
+        div.innerHTML = `${escHtml(m.content)}<div class="bub-foot"><time>${timeAgo(m.created_at)}</time></div>`;
+        mb.appendChild(div); mb.scrollTop = mb.scrollHeight;
+        socket.emit('mark_read', { from: m.sender_id });
+        refreshThreads();
+      }
+    } else {
+      // Not on this chat — badge + toast
       updBadge('mbadge', 1);
-      if (m.sender_name) toast(`💬 New message from ${m.sender_name}`);
+      if (m.sender_name) toast(`💬 ${m.sender_name}: ${(m.content||'').substring(0,60)}`);
+      if (curPage === 'messaging') refreshThreads(); // update thread list unread dot
     }
   });
 
-  socket.on('notification', (data) => {
+  // Read receipts — my sent messages turn blue tick when receiver reads
+  socket.on('read_receipt', ({ by }) => {
+    if (achat == by) document.querySelectorAll('#cmsgs .bub.mine .tick').forEach(t => { t.className = 'tick read'; t.innerHTML = '<i class="fas fa-check-double"></i>'; });
+  });
+
+  // Typing
+  socket.on('typing', ({ from }) => {
+    if (from != achat) return;
+    const ti = document.getElementById('typind');
+    if (ti) { ti.style.display = 'flex'; clearTimeout(window._tt); window._tt = setTimeout(() => { if (ti) ti.style.display = 'none'; }, 3000); }
+  });
+  socket.on('stop_typing', ({ from }) => {
+    if (from != achat) return;
+    clearTimeout(window._tt); const ti = document.getElementById('typind'); if (ti) ti.style.display = 'none';
+  });
+
+  // Presence
+  socket.on('online_users', ids => {
+    window._online = new Set(ids.map(String));
+    updatePresence(achat);
+  });
+  socket.on('user_online', ({ userId }) => {
+    window._online = window._online || new Set(); window._online.add(String(userId)); updatePresence(userId);
+  });
+  socket.on('user_offline', ({ userId }) => {
+    window._online = window._online || new Set(); window._online.delete(String(userId)); updatePresence(userId);
+  });
+
+  socket.on('notification', data => {
     pollBadges();
-    // Show a toast so user knows what happened
-    if (data && data.content) {
-      const icons = {
-        connection_request: '👤',
-        connection_accepted: '🎉',
-        like: '❤️',
-        comment: '💬',
-        session_booked: '📅'
-      };
-      const icon = icons[data.type] || '🔔';
-      toast(`${icon} ${data.content}`);
+    if (data?.content) {
+      const icons = { connection_request:'👤', connection_accepted:'🎉', like:'❤️', comment:'💬', session_booked:'📅' };
+      toast(`${icons[data.type]||'🔔'} ${data.content}`);
     }
-    // If user is currently on Network page, refresh invitations live
-    if (data?.type === 'connection_request' && curPage === 'network') {
-      renderNetwork();
-    }
+    if (data?.type === 'connection_request' && curPage === 'network') renderNetwork();
   });
 }
+function updatePresence(uid) {
+  const online = window._online?.has(String(uid));
+  const wrap = document.getElementById('ctop-pres');
+  if (wrap) wrap.classList.toggle('online', !!online);
+  const sub = document.getElementById('ctop-sub');
+  if (sub && uid == achat) sub.textContent = online ? 'Active now' : (sub.dataset.hl || '');
+}
+async function refreshThreads() {
+  const ml = document.getElementById('ml'); if (!ml) return;
+  const th = await api('/api/messages/threads');
+  if (!Array.isArray(th) || !th.length) return;
+  ml.innerHTML = th.map(t => `<div class="mthread${t.id==achat?' active':''}" id="mt-${t.id}" onclick="openChat(${t.id},'${String(t.name).replace(/'/g,"&apos;")}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||''}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
+}
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 async function pollBadges() {
   const r = await api('/api/notifications/badges').catch(() => ({}));
   if (r.unread_notifications > 0) updBadge('nbadge', r.unread_notifications); else updBadge('nbadge', 0);
@@ -926,75 +991,64 @@ async function showNewMsg() {
 function filterMsgConns() { const q = document.getElementById('msrch')?.value.toLowerCase(); document.querySelectorAll('.mconn-row').forEach(r => { r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
 async function openChat(uid, name) {
   achat = uid;
+  clearInterval(window._chatPollTimer); // clear any old poll
   document.querySelectorAll('.mthread').forEach(e => e.classList.remove('active'));
   document.getElementById('mt-' + uid)?.classList.add('active');
-  if (socket) socket.emit('join_chat', uid);
-  const [info, msgs] = await Promise.all([api('/api/users/' + uid).catch(() => ({ name: name || 'User' })), api('/api/messages/' + uid)]);
+  if (socket) { socket.emit('join_chat', uid); socket.emit('mark_read', { from: uid }); }
+  const [info, msgs] = await Promise.all([
+    api('/api/users/' + uid).catch(() => ({ name: name || 'User' })),
+    api('/api/messages/' + uid)
+  ]);
   const col = document.getElementById('ccol'); if (!col) return;
-  col.innerHTML = `<div id="ctop">${av(info, 'av40')}<div><h3>${info.name || name}</h3><p>${info.headline || ''}</p></div><button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button></div>
-    <div id="cmsgs">${(Array.isArray(msgs) ? msgs : []).map(m => `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`).join('')}</div>
-    <div id="typind">typing…</div>
-    <div id="cinp"><input id="cinput" placeholder="Write a message…" onkeydown="if(event.key==='Enter')sendMsg();else emitTyp()"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
+  const isOnline = window._online?.has(String(uid));
+  const hl = info.headline || '';
+  col.innerHTML = `
+    <div id="ctop">
+      <div class="pres-wrap${isOnline?' online':''}" id="ctop-pres">${av(info,'av40')}<div class="pres-dot"></div></div>
+      <div><h3>${escHtml(info.name||name)}</h3><p id="ctop-sub" data-hl="${escHtml(hl)}">${isOnline?'Active now':hl}</p></div>
+      <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button>
+    </div>
+    <div id="cmsgs">${(Array.isArray(msgs)?msgs:[]).map(m=>`<div class="bub ${m.sender_id==me.id?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot"><time>${timeAgo(m.created_at)}</time>${m.sender_id==me.id?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`).join('')}</div>
+    <div id="typind"><div class="tdots"><span></span><span></span><span></span></div><span id="tname">${escHtml(info.name||name)}</span> is typing…</div>
+    <div id="cinp"><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
-  if (socket) {
-    socket.off('message'); socket.on('message', m => {
-      // Badge + toast when not on messaging page
-      if (curPage !== 'messaging' && m.sender_id != me?.id) {
-        updBadge('mbadge', 1);
-        if (m.sender_name) toast(`💬 New message from ${m.sender_name}`);
-      }
-      // Only render in chat if the open conversation matches
-      if (m.sender_id != me?.id && (m.sender_id == uid || m.receiver_id == uid)) {
-        // Only append socket messages from OTHER person (own messages added in sendMsg)
-        const mb = document.getElementById('cmsgs');
-        if (mb && !mb.querySelector('[data-mid="' + m.id + '"]')) {
-          mb.innerHTML += `<div class="bub theirs" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`;
-          mb.scrollTop = mb.scrollHeight;
-          // Refresh thread list for receiver too
-          api('/api/messages/threads').then(th => {
-            const ml = document.getElementById('ml');
-            if (ml && Array.isArray(th) && th.length) {
-              ml.innerHTML = th.map(t => `<div class="mthread${t.id==uid?' active':''}" id="mt-${t.id}" onclick="openChat(${t.id},'${String(t.name).replace(/'/g,'&apos;')}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||''}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
-            }
-          });
-        }
-      }
-    });
-    socket.off('typing'); socket.on('typing', ({ from }) => { if (from == uid) { const ti = document.getElementById('typind'); if (ti) { ti.style.display = 'block'; clearTimeout(window._tt); window._tt = setTimeout(() => ti.style.display = 'none', 2000); } } });
-  }
-  // Polling fallback: catch any socket-missed messages every 8s
-  clearInterval(window._chatPollTimer);
-  window._chatPollTimer = setInterval(async () => {
-    if (achat !== uid || curPage !== 'messaging') { clearInterval(window._chatPollTimer); return; }
-    const msgs = await api('/api/messages/' + uid);
-    const mb = document.getElementById('cmsgs'); if (!mb) return;
-    (Array.isArray(msgs) ? msgs : []).forEach(m => {
-      if (!mb.querySelector('[data-mid="' + m.id + '"]')) {
-        mb.innerHTML += `<div class="bub ${m.sender_id == me.id ? 'mine' : 'theirs'}" data-mid="${m.id}">${m.content}<time>${timeAgo(m.created_at)}</time></div>`;
-        mb.scrollTop = mb.scrollHeight;
-      }
-    });
-  }, 8000);
+  // Request presence for this user
+  if (socket) socket.emit('get_presence', { userId: uid });
 }
-function emitTyp() { if (socket && achat) socket.emit('typing', { to: achat }); }
+let _typTimer;
+function emitTyp() {
+  if (!socket || !achat) return;
+  socket.emit('typing', { to: achat });
+  clearTimeout(_typTimer);
+  _typTimer = setTimeout(() => { if (socket && achat) socket.emit('stop_typing', { to: achat }); }, 2000);
+}
 async function sendMsg() {
-  const inp = document.getElementById('cinput'); const c = inp?.value.trim(); if (!c || !achat) return;
+  const inp = document.getElementById('cinput');
+  const c = inp?.value.trim(); if (!c || !achat) return;
   inp.value = '';
-  const msg = await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
-  if (!msg || msg.error) { toast('Message failed to send'); inp.value = c; return; }
+  if (socket) { socket.emit('stop_typing', { to: achat }); clearTimeout(_typTimer); }
+  // Optimistic: show immediately before server confirms
+  const tempId = 'tmp-' + Date.now();
   const mb = document.getElementById('cmsgs');
-  if (mb && !mb.querySelector('[data-mid="' + msg.id + '"]')) {
-    mb.innerHTML += `<div class="bub mine" data-mid="${msg.id}">${c}<time>just now</time></div>`;
-    mb.scrollTop = mb.scrollHeight;
+  if (mb) {
+    const div = document.createElement('div');
+    div.className = 'bub mine'; div.setAttribute('data-mid', tempId);
+    div.innerHTML = `${escHtml(c)}<div class="bub-foot"><time>just now</time><span class="tick sent"><i class="fas fa-clock" style="font-size:9px;opacity:.7"></i></span></div>`;
+    mb.appendChild(div); mb.scrollTop = mb.scrollHeight;
   }
-  // Refresh thread list so sender sees the conversation appear
-  const ml = document.getElementById('ml');
-  if (ml) {
-    const th = await api('/api/messages/threads');
-    if (Array.isArray(th) && th.length) {
-      ml.innerHTML = th.map(t => `<div class="mthread${t.id == achat ? ' active' : ''}" id="mt-${t.id}" onclick="openChat(${t.id},'${t.name.replace(/'/g,'&apos;')}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||'Start a conversation'}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
+  const msg = await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
+  const tmpEl = mb?.querySelector('[data-mid="' + tempId + '"]');
+  if (msg && !msg.error) {
+    if (tmpEl) {
+      tmpEl.setAttribute('data-mid', msg.id);
+      const tick = tmpEl.querySelector('.tick');
+      if (tick) { tick.className = 'tick sent'; tick.innerHTML = '<i class="fas fa-check"></i>'; }
     }
+  } else {
+    if (tmpEl) { tmpEl.style.opacity = '0.4'; const tick = tmpEl.querySelector('.tick'); if (tick) tick.innerHTML = '!'; }
+    toast('Failed to send'); inp.value = c;
   }
+  refreshThreads();
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────

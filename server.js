@@ -836,28 +836,69 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // SOCKET.IO
+const onlineUsers = new Map(); // userId -> Set of socketIds
+
 io.on('connection', socket => {
   socket.on('authenticate', (token) => {
     try {
       const { id } = jwt.verify(token, JWT_SECRET);
       socket.userId = id;
       socket.join(`user_${id}`);
-      // Auto-join all existing conversation rooms so receiver gets messages even without opening chat
-      const partners = db.prepare('SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?').all(id, id, id);
-      partners.forEach(({ partner_id }) => {
-        const room = [id, partner_id].sort().join('-');
-        socket.join(room);
-      });    } catch {}
+      // Auto-join all existing conversation rooms
+      const partners = db.prepare(
+        'SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?'
+      ).all(id, id, id);
+      partners.forEach(({ partner_id }) => socket.join([id, partner_id].sort().join('-')));
+
+      // Presence: add to online set, broadcast to contacts
+      if (!onlineUsers.has(id)) onlineUsers.set(id, new Set());
+      onlineUsers.get(id).add(socket.id);
+      partners.forEach(({ partner_id }) => io.to(`user_${partner_id}`).emit('user_online', { userId: id }));
+
+      // Send current online list to this socket (only users they have chats with)
+      const onlineNow = partners.map(p => p.partner_id).filter(pid => onlineUsers.has(pid) && onlineUsers.get(pid).size > 0);      socket.emit('online_users', onlineNow);
+    } catch {}
   });
+
   socket.on('join_chat', (otherId) => {
     if (!socket.userId) return;
-    const room = [socket.userId, otherId].sort().join('-');
-    socket.join(room);
+    socket.join([socket.userId, otherId].sort().join('-'));
   });
+
   socket.on('typing', ({ to }) => {
     if (!socket.userId) return;
-    const room = [socket.userId, to].sort().join('-');
-    socket.to(room).emit('typing', { from: socket.userId });
+    socket.to([socket.userId, to].sort().join('-')).emit('typing', { from: socket.userId });
+  });
+
+  socket.on('stop_typing', ({ to }) => {
+    if (!socket.userId) return;
+    socket.to([socket.userId, to].sort().join('-')).emit('stop_typing', { from: socket.userId });
+  });
+
+  socket.on('mark_read', ({ from }) => {
+    if (!socket.userId || !from) return;
+    db.prepare('UPDATE messages SET is_read=1 WHERE sender_id=? AND receiver_id=? AND is_read=0').run(from, socket.userId);
+    io.to(`user_${from}`).emit('read_receipt', { by: socket.userId });
+  });
+
+  socket.on('get_presence', ({ userId }) => {
+    const online = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
+    socket.emit(online ? 'user_online' : 'user_offline', { userId });
+  });
+
+  socket.on('disconnect', () => {
+    if (!socket.userId) return;
+    const sockets = onlineUsers.get(socket.userId);
+    if (sockets) {
+      sockets.delete(socket.id);
+      if (sockets.size === 0) {
+        onlineUsers.delete(socket.userId);
+        const partners = db.prepare(
+          'SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?'
+        ).all(socket.userId, socket.userId, socket.userId);
+        partners.forEach(({ partner_id }) => io.to(`user_${partner_id}`).emit('user_offline', { userId: socket.userId }));
+      }
+    }
   });
 });
 
