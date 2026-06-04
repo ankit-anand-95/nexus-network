@@ -199,8 +199,10 @@ app.put('/api/users/me', auth, (req, res) => {
   const about = sanitizeRich(rawBody.about, 2000);
   const current_position = sanitize(rawBody.current_position, 220);
   const is_dark_mode = rawBody.is_dark_mode;
+  // Only update fields that were explicitly provided (non-empty strings)
+  const noe = v => (v === '' || v == null) ? null : v;
   db.prepare(`UPDATE users SET name=COALESCE(?,name), headline=COALESCE(?,headline), location=COALESCE(?,location), about=COALESCE(?,about), current_position=COALESCE(?,current_position), is_dark_mode=COALESCE(?,is_dark_mode) WHERE id=?`)
-    .run(name, headline, location, about, current_position, is_dark_mode, req.user.id);
+    .run(noe(name), noe(headline), noe(location), noe(about), noe(current_position), is_dark_mode ?? null, req.user.id);
   res.json({ ok: true });
 });
 
@@ -330,7 +332,17 @@ app.post('/api/posts', auth, (req, res) => {
     const stmt = db.prepare(`INSERT INTO poll_options (post_id, option_text) VALUES (?, ?)`);
     poll_options.forEach(opt => stmt.run(info.lastInsertRowid, opt));
   }
-  res.json({ id: info.lastInsertRowid });
+  // Return the full post so frontend can render it immediately
+  const newPost = db.prepare(`
+    SELECT p.*, u.name as author_name, u.avatar_url as author_avatar, u.headline as author_headline,
+      0 as liked, 0 as likes_count, 0 as comments_count
+    FROM posts p LEFT JOIN users u ON p.author_id = u.id
+    WHERE p.id = ?
+  `).get(info.lastInsertRowid);
+  if (is_poll && poll_options?.length) {
+    newPost.poll_options = db.prepare(`SELECT * FROM poll_options WHERE post_id=?`).all(info.lastInsertRowid);
+  }
+  res.json(newPost || { id: info.lastInsertRowid });
 });
 
 app.delete('/api/posts/:id', auth, (req, res) => {
@@ -338,26 +350,32 @@ app.delete('/api/posts/:id', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/posts/:id/like', auth, (req, res) => {
+// Like toggle — accepts both POST and DELETE from client
+function toggleLike(req, res) {
   const postId = req.params.id;
   const existing = db.prepare(`SELECT id FROM likes WHERE post_id=? AND user_id=?`).get(postId, req.user.id);
   if (existing) {
     db.prepare(`DELETE FROM likes WHERE post_id=? AND user_id=?`).run(postId, req.user.id);
     db.prepare(`UPDATE posts SET likes_count = MAX(0, likes_count-1) WHERE id=?`).run(postId);
-    res.json({ liked: false });
   } else {
     db.prepare(`INSERT INTO likes (post_id, user_id) VALUES (?, ?)`).run(postId, req.user.id);
     db.prepare(`UPDATE posts SET likes_count = likes_count+1 WHERE id=?`).run(postId);
     const post = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(postId);
-    const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-    createNotif(post.author_id, req.user.id, 'like', postId, `${actor.name} liked your post`);
-    res.json({ liked: true });
+    if (post && post.author_id !== req.user.id) {
+      const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
+      if (actor) createNotif(post.author_id, req.user.id, 'like', postId, `${actor.name} liked your post`);
+    }
   }
-});
+  const updated = db.prepare(`SELECT likes_count FROM posts WHERE id=?`).get(postId);
+  res.json({ liked: !existing, likes_count: updated?.likes_count ?? 0 });
+}
+app.post('/api/posts/:id/like', auth, toggleLike);
+app.delete('/api/posts/:id/like', auth, toggleLike);
 
 app.post('/api/posts/:id/comments', auth, (req, res) => {
-  const { content } = req.body;
+  const content = sanitize(req.body.content, 1000);
   const postId = req.params.id;
+  if (!content) return res.status(400).json({ error: 'Comment cannot be empty' });
   const info = db.prepare(`INSERT INTO comments (post_id, author_id, content) VALUES (?, ?, ?)`).run(postId, req.user.id, content);
   db.prepare(`UPDATE posts SET comments_count = comments_count+1 WHERE id=?`).run(postId);
   const post = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(postId);
@@ -520,6 +538,12 @@ app.get('/api/notifications', auth, (req, res) => {
     WHERE n.user_id=? ORDER BY n.created_at DESC LIMIT 50
   `).all(req.user.id);
   res.json(notifs);
+});
+
+app.get('/api/notifications/badges', auth, (req, res) => {
+  const unread_notifications = db.prepare(`SELECT COUNT(*) as n FROM notifications WHERE user_id=? AND is_read=0`).get(req.user.id)?.n || 0;
+  const unread_messages = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE receiver_id=? AND is_read=0`).get(req.user.id)?.n || 0;
+  res.json({ unread_notifications, unread_messages });
 });
 
 app.put('/api/notifications/read-all', auth, (req, res) => {
@@ -697,7 +721,7 @@ app.post('/api/jobs/:id/apply', auth, (req, res) => {
   const { cover_letter } = req.body;
   try {
     db.prepare(`INSERT INTO job_applications (job_id, applicant_id, cover_letter) VALUES (?, ?, ?)`).run(req.params.id, req.user.id, cover_letter||'');
-are(`UPDATE jobs SET applications_count=applications_count+1 WHERE id=?`).run(req.params.id);
+db.prepare(`UPDATE jobs SET applications_count=applications_count+1 WHERE id=?`).run(req.params.id);
     res.json({ ok: true });
   } catch { res.status(400).json({ error: 'Already applied' }); }
 });

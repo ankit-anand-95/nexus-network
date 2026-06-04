@@ -216,7 +216,7 @@ const tables = [
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   job_id INTEGER NOT NULL,
   applicant_id INTEGER NOT NULL,
-T DEFAULT 'applied',
+  status TEXT DEFAULT 'applied',
   cover_letter TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(job_id, applicant_id),

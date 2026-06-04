@@ -545,9 +545,11 @@ function renderPost(p) {
 async function likePost(id, btn) {
   const liked = btn.classList.contains('liked');
   const r = await api('/api/posts/' + id + '/like', { method: liked ? 'DELETE' : 'POST' });
-  btn.classList.toggle('liked', !liked);
-  btn.innerHTML = `<i class="fa${!liked ? 's' : 'r'} fa-heart"></i> ${r.likes_count || 0}`;
+  if (r.error) { toast(r.error); return; }
+  btn.classList.toggle('liked', r.liked);
+  btn.innerHTML = `<i class="${r.liked ? 'fas' : 'far'} fa-heart"></i> ${r.likes_count ?? 0}`;
 }
+
 async function toggleComs(id) {
   const el = document.getElementById('coms-' + id); if (!el) return;
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
