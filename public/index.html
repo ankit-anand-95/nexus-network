@@ -243,7 +243,21 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
       <button class="nb" id="nb-reviews" onclick="go('reviews')"><i class="fas fa-star"></i>Reviews</button>
       <button class="nb" id="nb-experts" onclick="go('experts')"><i class="fas fa-chalkboard-teacher"></i>Mentors</button>
       <button class="nb" onclick="toggleDark()" title="Toggle theme"><i class="fas fa-moon"></i></button>
-      <button class="nb" id="nb-profile" onclick="go('profile')"><i class="fas fa-user-circle"></i>Me</button>
+      <div class="me-wrap" id="me-wrap">
+        <button class="nb" id="nb-profile" onclick="toggleMeMenu()">
+          <span id="me-av-sm"></span>Me<i class="fas fa-caret-down" style="font-size:10px;margin-left:2px"></i>
+        </button>
+        <div class="me-menu" id="me-menu" style="display:none">
+          <div class="me-hdr" id="me-menu-hdr"></div>
+          <hr style="border:none;border-top:1px solid var(--border);margin:4px 0">
+          <a href="#" class="me-item" onclick="closeMe();go('profile')"><i class="fas fa-user"></i> View Profile</a>
+          <a href="#" class="me-item" onclick="closeMe();go('network')"><i class="fas fa-users"></i> My Network</a>
+          <hr style="border:none;border-top:1px solid var(--border);margin:4px 0">
+          <a href="#" class="me-item" onclick="closeMe();toggleDark()"><i class="fas fa-moon"></i> Toggle Dark Mode</a>
+          <hr style="border:none;border-top:1px solid var(--border);margin:4px 0">
+          <a href="#" class="me-item" style="color:#ef4444" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sign Out</a>
+        </div>
+      </div>
     </div>
   </nav>
   <div id="pr"><div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div></div>
@@ -307,6 +321,34 @@ function toggleDark() {
   const isDark = document.body.classList.contains('dark');
   localStorage.setItem('nxdark', isDark ? '1' : '0');
   api('/api/users/me', { method: 'PUT', body: JSON.stringify({ is_dark_mode: isDark ? 1 : 0 }) });
+}
+function toggleMeMenu() {
+  const menu = document.getElementById('me-menu');
+  if (!menu) return;
+  const open = menu.style.display !== 'none';
+  menu.style.display = open ? 'none' : 'block';
+  if (!open && me) {
+    const hdr = document.getElementById('me-menu-hdr');
+    if (hdr) hdr.innerHTML = `<h4>${me.name}</h4><p>${me.headline || me.email || ''}</p>`;
+    const avEl = document.getElementById('me-av-sm');
+    if (avEl) avEl.outerHTML = me.avatar_url
+      ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
+      : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
+  }
+}
+function closeMe() { const m = document.getElementById('me-menu'); if (m) m.style.display = 'none'; }
+document.addEventListener('click', e => { if (!document.getElementById('me-wrap')?.contains(e.target)) closeMe(); });
+function logout() {
+  if (!confirm('Sign out of Nexus?')) return;
+  localStorage.removeItem('nxtoken');
+  localStorage.removeItem('nxdark');
+  token = ''; me = null;
+  if (socket) { socket.disconnect(); socket = null; }
+  clearInterval(window._feedPollTimer);
+  document.body.classList.remove('dark');
+  document.getElementById('appw').style.display = 'none';
+  showAuth('login');
+  toast('Signed out. See you soon!');
 }
 function initSocket() {
   if (typeof io === 'undefined') return;
@@ -664,12 +706,30 @@ async function toggleComs(id) {
   el.innerHTML = `<div class="coms-area">${Array.isArray(cs) ? cs.map(c => `<div class="com-row">${av({ name: c.author_name, avatar_url: c.author_avatar }, 'av40')}<div class="com-bub"><h5>${c.author_name}</h5><p>${c.content}</p></div></div>`).join('') : ''}<div class="com-inp">${av(me, 'av40')}<input id="ci-${id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')submitCom(${id})"><button class="btn btn-p btn-sm" onclick="submitCom(${id})">Post</button></div></div>`;
 }
 async function submitCom(id) {
-  const inp = document.getElementById('ci-' + id); const c = inp?.value.trim(); if (!c) return;
-  await api('/api/posts/' + id + '/comments', { method: 'POST', body: JSON.stringify({ content: c }) });
+  const inp = document.getElementById('ci-' + id);
+  const c = inp?.value.trim();
+  if (!c) return;
+  const btn = inp?.nextElementSibling;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const r = await api('/api/posts/' + id + '/comments', { method: 'POST', body: JSON.stringify({ content: c }) });
+  if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
+  if (r.error) { toast('Error: ' + r.error); return; }
   inp.value = '';
-  const res = await api('/api/posts/' + id + '/comments');
+  // Append new comment directly without full reload
   const area = document.querySelector('#coms-' + id + ' .coms-area');
-  if (area && Array.isArray(res)) { const iw = area.querySelector('.com-inp'); area.innerHTML = res.map(c => `<div class="com-row">${av({ name: c.author_name, avatar_url: c.author_avatar }, 'av40')}<div class="com-bub"><h5>${c.author_name}</h5><p>${c.content}</p></div></div>`).join(''); if (iw) area.appendChild(iw); }
+  if (area) {
+    const comInput = area.querySelector('.com-inp');
+    const div = document.createElement('div');
+    div.className = 'com-row';
+    div.innerHTML = `${av(me, 'av40')}<div class="com-bub"><h5>${me.name}</h5><p>${c}</p></div>`;
+    area.insertBefore(div, comInput);
+    // Update comment count badge in post actions
+    const cBtn = document.querySelector(`#pc-${id} .pact:nth-child(2)`);
+    if (cBtn) {
+      const cur = parseInt(cBtn.textContent.replace(/\D/g,'')) || 0;
+      cBtn.innerHTML = `<i class="far fa-comment"></i> ${cur + 1}`;
+    }
+  }
 }
 async function votePoll(pid, oid) {
   const res = await api('/api/posts/' + pid + '/poll/' + oid + '/vote', { method: 'POST' });
@@ -798,9 +858,17 @@ async function sendConn(id, btn) {
   toast('Request sent!');
 }
 async function actConn(id, action, btn) {
-  await api('/api/connections/' + id, { method: 'PUT', body: JSON.stringify({ action }) });
-  btn.closest('.prow')?.remove(); toast(action === 'accept' ? '🎉 Connected!' : 'Declined');
-  if (action === 'accept') { me.connections_count = (me.connections_count || 0) + 1; renderSB(); }
+  const r = await api('/api/connections/' + id, { method: 'PUT', body: JSON.stringify({ action }) });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  btn.closest('.prow')?.remove();
+  toast(action === 'accept' ? '🎉 Connected!' : 'Declined');
+  if (action === 'accept') {
+    me.connections_count = (me.connections_count || 0) + 1;
+    renderSB();
+    // Refresh network page after short delay to show new connection
+    setTimeout(() => renderNetwork(), 800);
+  }
+  pollBadges(); // update Network badge count
 }
 
 // ── MESSAGING ─────────────────────────────────────────────────────────────
