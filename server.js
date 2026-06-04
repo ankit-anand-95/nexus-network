@@ -132,7 +132,7 @@ app.get('/api/search', auth, (req, res) => {
       CASE WHEN p.is_anonymous=1 THEN 'Anonymous' ELSE u.name END AS author_name,
       CASE WHEN p.is_anonymous=1 THEN NULL ELSE u.avatar_url END AS author_avatar,
       CASE WHEN p.is_anonymous=1 THEN NULL ELSE u.id END AS author_id
-    FROM posts p JOIN users u ON p.user_id=u.id
+    FROM posts p LEFT JOIN users u ON p.author_id=u.id
     WHERE p.is_published=1 AND p.content LIKE ?
     ORDER BY p.created_at DESC LIMIT 10
   `).all(like);

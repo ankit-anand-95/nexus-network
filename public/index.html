@@ -470,7 +470,7 @@ function renderPost(p) {
   }
   const isLiked = p.liked || p.user_liked;
   return `<div class="card post" id="pc-${p.id}">
-    <div class="post-hdr">${av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<button onclick="delPost(${p.id})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}</div>
+    <div class="post-hdr">${av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name || 'Nexus Member'}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<button onclick="delPost(${p.id})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}</div>
     <div class="post-body">${p.content}</div>
     ${p.image_url ? `<img src="${p.image_url}" class="post-img" loading="lazy">` : ''}
     ${pollHtml}
@@ -608,7 +608,7 @@ async function renderNetwork() {
     : `<div style="text-align:center;padding:32px;color:var(--sub);grid-column:1/-1"><i class="fas fa-users" style="font-size:40px;opacity:.2;display:block;margin-bottom:12px"></i><p style="font-weight:600;margin-bottom:6px">No suggestions yet</p><p style="font-size:13px">Use the <strong>search bar</strong> to find people by name, company, or headline.</p></div>`;
   document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
     ${Array.isArray(rq) && rq.length ? `<div class="card" style="margin-bottom:16px"><div class="ch">Invitations <span class="chip chip-p">${rq.length}</span></div>${rq.map(r => `<div class="prow">${av(r, 'av48')}<div class="pinfo"><h4>${r.name}</h4><p>${r.headline || ''}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(r.created_at)}</time></div><button class="btn btn-p btn-sm" onclick="actConn(${r.connection_id},'accept',this)">Accept</button><button class="btn btn-o btn-sm" style="margin-left:6px" onclick="actConn(${r.connection_id},'decline',this)">Decline</button></div>`).join('')}</div>` : ''}
-    <div class="card" style="margin-bottom:16px"><div class="ch">People you may know <span style="font-size:12px;color:var(--sub);font-weight:400">2nd &amp; 3rd degree</span></div><div class="cb"><div class="sug-grid">${sugHtml}</div></div></div>
+    <div class="card" style="margin-bottom:16px"><div class="ch">People you may know</div><div class="cb"><div class="sug-grid">${sugHtml}</div></div></div>
     ${Array.isArray(co) && co.length ? `<div class="card"><div class="ch">Your Connections <span class="chip chip-p">${co.length}</span></div>${co.map(c => `<div class="prow">${av(c, 'av48')}<div class="pinfo"><h4><a href="#" onclick="go('profile',${c.id})" style="color:var(--text);text-decoration:none">${c.name}</a></h4><p>${c.headline || c.current_position || ''}</p></div><div style="display:flex;gap:6px"><button class="btn btn-o btn-sm" onclick="go('profile',${c.id})">Profile</button><button class="btn btn-p btn-sm" onclick="go('messaging',${c.id})"><i class="fas fa-comment"></i> Message</button></div></div>`).join('')}</div>` : `<div class="card"><div class="ch">Your Connections</div><div class="empty" style="padding:40px"><i class="fas fa-user-plus" style="font-size:40px"></i><p>No connections yet</p><p style="font-size:13px;margin-top:6px">Search for people above or explore suggestions</p></div></div>`}
   </div>`;
 }
@@ -782,12 +782,4 @@ async function saveJob() {
       if (me && me.id) {
         document.getElementById('awrap').style.display = 'none';
         document.getElementById('appw').style.display = 'flex';
-        if (me.is_dark_mode) document.body.classList.add('dark');
-        initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
-      } else { localStorage.removeItem('nxtoken'); showAuth(); }
-    } catch { localStorage.removeItem('nxtoken'); showAuth(); }
-  } else { showAuth(); }
-})();
-</script>
-</body>
-</html>
+        if 
