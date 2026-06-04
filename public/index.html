@@ -782,4 +782,12 @@ async function saveJob() {
       if (me && me.id) {
         document.getElementById('awrap').style.display = 'none';
         document.getElementById('appw').style.display = 'flex';
-        if 
+        if (me.is_dark_mode) document.body.classList.add('dark');
+        initSocket(); go('home'); pollBadges(); setInterval(pollBadges, 30000);
+      } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
+    } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
+  } else { showAuth(); }
+})();
+</script>
+</body>
+</html>
