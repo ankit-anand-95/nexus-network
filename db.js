@@ -235,4 +235,11 @@ const tables = [
 
 tables.forEach(sql => db.exec(sql));
 
+// Migrations — safe to run multiple times (try/catch for "duplicate column" errors)
+const migrations = [
+  `ALTER TABLE expert_profiles ADD COLUMN meeting_link TEXT DEFAULT ''`,
+  `ALTER TABLE expert_profiles ADD COLUMN availability_slots TEXT DEFAULT '[]'`,
+];
+migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
+
 module.exports = db;

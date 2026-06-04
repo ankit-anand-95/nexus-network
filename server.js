@@ -487,7 +487,7 @@ app.get('/api/connections/requests', auth, (req, res) => {
 
 app.get('/api/connections/suggestions', auth, (req, res) => {
   const uid = req.user.id;
-  // Show 2nd-degree (friends-of-friends) first, then others
+  // Show 2nd-degree (friends-of-friends) first, then everyone else not yet connected
   const suggestions = db.prepare(`
     SELECT u.id, u.name, u.headline, u.avatar_url, u.current_position,
       COUNT(DISTINCT bridge.mid) AS mutual_count,
@@ -509,7 +509,7 @@ app.get('/api/connections/suggestions', auth, (req, res) => {
     WHERE u.id != ?
     AND u.id NOT IN (
       SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
-      FROM connections WHERE (requester_id=? OR addressee_id=?)
+      FROM connections WHERE (requester_id=? OR addressee_id=?) AND status IN ('accepted','pending')
     )
     GROUP BY u.id
     ORDER BY mutual_count DESC, RANDOM()
@@ -698,7 +698,7 @@ app.get('/api/experts', auth, (req, res) => {
     FROM expert_profiles e JOIN users u ON e.user_id=u.id
     WHERE e.is_available=1 ORDER BY e.rating DESC, e.total_sessions DESC
   `).all();
-  res.json(experts.map(e => ({ ...e, expertise: JSON.parse(e.expertise || '[]'), session_types: JSON.parse(e.session_types || '[]') })));
+  res.json(experts.map(e => ({ ...e, expertise: JSON.parse(e.expertise || '[]'), session_types: JSON.parse(e.session_types || '[]'), availability_slots: JSON.parse(e.availability_slots || '[]') })));
 });
 
 app.get('/api/experts/me', auth, (req, res) => {
@@ -708,16 +708,32 @@ app.get('/api/experts/me', auth, (req, res) => {
 });
 
 app.post('/api/experts/me', auth, (req, res) => {
-  const { bio, expertise, session_types, price_per_session } = req.body;
+  const { bio, expertise, session_types, price_per_session, meeting_link, availability_slots } = req.body;
   const existing = db.prepare(`SELECT id FROM expert_profiles WHERE user_id=?`).get(req.user.id);
   if (existing) {
-    db.prepare(`UPDATE expert_profiles SET bio=?, expertise=?, session_types=?, price_per_session=? WHERE user_id=?`)
-      .run(bio, JSON.stringify(expertise || []), JSON.stringify(session_types || []), price_per_session || 500, req.user.id);
+    db.prepare(`UPDATE expert_profiles SET bio=?, expertise=?, session_types=?, price_per_session=?, meeting_link=?, availability_slots=? WHERE user_id=?`)
+      .run(bio, JSON.stringify(expertise || []), JSON.stringify(session_types || []), price_per_session || 500, meeting_link || '', JSON.stringify(availability_slots || []), req.user.id);
   } else {
-    db.prepare(`INSERT INTO expert_profiles (user_id, bio, expertise, session_types, price_per_session) VALUES (?, ?, ?, ?, ?)`)
-      .run(req.user.id, bio, JSON.stringify(expertise || []), JSON.stringify(session_types || []), price_per_session || 500);
+    db.prepare(`INSERT INTO expert_profiles (user_id, bio, expertise, session_types, price_per_session, meeting_link, availability_slots) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(req.user.id, bio, JSON.stringify(expertise || []), JSON.stringify(session_types || []), price_per_session || 500, meeting_link || '', JSON.stringify(availability_slots || []));
   }
   res.json({ ok: true });
+});
+
+// Book a specific availability slot
+app.post('/api/experts/:expertId/book-slot', auth, (req, res) => {
+  const { slotKey } = req.body; // e.g. "2024-01-15T10:00"
+  const expert = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(req.params.expertId);
+  if (!expert) return res.status(404).json({ error: 'Expert not found' });
+  const slots = JSON.parse(expert.availability_slots || '[]');
+  const slot = slots.find(s => s.key === slotKey);
+  if (!slot) return res.status(404).json({ error: 'Slot not found' });
+  if (slot.booked) return res.status(400).json({ error: 'Slot already booked' });
+  slot.booked = true; slot.booked_by = req.user.id;
+  db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), req.params.expertId);
+  const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
+  createNotif(parseInt(req.params.expertId), req.user.id, 'session_booked', 0, `${actor.name} booked a session with you on ${slotKey}`);
+  res.json({ ok: true, meeting_link: expert.meeting_link });
 });
 
 app.get('/api/sessions', auth, (req, res) => {

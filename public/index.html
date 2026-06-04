@@ -1167,22 +1167,136 @@ async function saveRev() {
 // ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
 async function renderExperts() {
   const d = await api('/api/experts');
-  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto"><div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
-    ${Array.isArray(d) && d.length ? `<div class="sug-grid">${d.map(e => { const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || ''); return `<div class="card" style="padding:20px;text-align:center">${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}<h4 style="margin:10px 0 4px">${e.name || 'Mentor'}</h4><p style="font-size:12px;color:var(--sub);margin:0 0 4px">${e.headline || ''}</p><p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 8px">${expertiseStr}</p><p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 12px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub)">/session</span></p><a href="${e.booking_url || '#'}" target="_blank" class="btn btn-p btn-sm" style="width:100%;justify-content:center"><i class="fas fa-video"></i> Book Session</a></div>`; }).join('')}</div>` : '<div class="card empty"><i class="fas fa-chalkboard-teacher" style="font-size:40px"></i><p>No mentors yet — be the first to offer!</p></div>'}
+  const cards = Array.isArray(d) && d.length ? d.map(e => {
+    const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || '');
+    const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
+    const freeSlots = slots.filter(s => !s.booked).length;
+    const totalSlots = slots.length;
+    return `<div class="card" style="padding:20px;text-align:center">
+      ${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}
+      <h4 style="margin:10px 0 2px;font-size:15px">${escHtml(e.name || 'Mentor')}</h4>
+      <p style="font-size:12px;color:var(--sub);margin:0 0 6px">${escHtml(e.headline || '')}</p>
+      <p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 4px">${escHtml(expertiseStr)}</p>
+      <p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 4px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub);font-size:12px">/session</span></p>
+      ${totalSlots ? `<p style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
+      <button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name||'Mentor')}')"><i class="fas fa-video"></i> Book Session</button>
+    </div>`;
+  }).join('') : '<div class="card empty" style="text-align:center;padding:40px"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No mentors yet — be the first to offer!</p></div>';
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
+    <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
+    <div class="sug-grid">${cards}</div>
   </div>`;
 }
-function showExpertForm() {
+
+async function bookSession(expertId, expertName) {
+  const experts = await api('/api/experts');
+  const e = Array.isArray(experts) ? experts.find(x => x.user_id == expertId) : null;
+  const slots = Array.isArray(e?.availability_slots) ? e.availability_slots : [];
+  if (!slots.length) {
+    showModal(`<h2 style="margin-bottom:12px">Book with ${escHtml(expertName)}</h2>
+      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:16px;margin-bottom:16px;font-size:13px">
+        <p style="margin:0 0 8px;font-weight:600"><i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i>Meeting Link</p>
+        ${e?.meeting_link ? `<a href="${e.meeting_link}" target="_blank" style="color:var(--primary);word-break:break-all">${e.meeting_link}</a>` : '<p style="margin:0;color:var(--sub)">No meeting link set yet</p>'}
+      </div>
+      <p style="color:var(--sub);font-size:13px;text-align:center">No time slots added yet. Contact the mentor directly.</p>
+      ${e?.meeting_link ? `<a href="${e.meeting_link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center;margin-top:8px"><i class="fas fa-external-link-alt"></i> Join Meeting Room</a>` : ''}
+    `);
+    return;
+  }
+  const slotRows = slots.map(s => {
+    const dt = new Date(s.key);
+    const label = dt.toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    return s.booked
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--inp);margin-bottom:8px;opacity:.5">
+           <span style="font-size:13px;text-decoration:line-through">${label}</span>
+           <span style="font-size:11px;color:#ef4444;font-weight:600">Booked</span>
+         </div>`
+      : `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1px solid var(--border);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${expertId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}')">
+           <span style="font-size:13px;font-weight:600">${label}</span>
+           <span class="btn btn-p btn-sm" style="pointer-events:none">Select</span>
+         </div>`;
+  }).join('');
+  showModal(`<h2 style="margin-bottom:4px">Book with ${escHtml(expertName)}</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Pick an available time slot below</p>
+    <div style="max-height:340px;overflow-y:auto">${slotRows}</div>`);
+}
+
+async function confirmBookSlot(expertId, slotKey, expertName, meetingLink) {
+  const r = await api(`/api/experts/${expertId}/book-slot`, { method:'POST', body: JSON.stringify({ slotKey }) });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  closeModal();
+  const link = r.meeting_link || meetingLink;
+  if (link) {
+    showModal(`<div style="text-align:center;padding:12px 0">
+      <div style="font-size:48px;margin-bottom:12px">🎉</div>
+      <h2 style="margin-bottom:8px">Session Booked!</h2>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:20px">You're booked with ${escHtml(expertName)}. Join using the link below.</p>
+      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:14px;margin-bottom:16px;word-break:break-all;font-size:13px">
+        <i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i><a href="${link}" target="_blank" style="color:var(--primary)">${link}</a>
+      </div>
+      <a href="${link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center"><i class="fas fa-external-link-alt"></i> Join Meeting Now</a>
+    </div>`);
+  } else {
+    toast('Session booked! 🎉 The mentor will share a meeting link.');
+    renderExperts();
+  }
+}
+
+async function showExpertForm() {
+  const existing = await api('/api/experts/me');
+  const slots = Array.isArray(existing?.availability_slots) ? existing.availability_slots : [];
+  const slotsJson = JSON.stringify(slots);
   showModal(`<h2 style="margin-bottom:16px">Offer Mentoring</h2>
-    <div class="fg"><label>Expertise</label><input id="exex" placeholder="e.g. System Design, React, DSA"></div>
-    <div class="fg"><label>Price per session (₹)</label><input id="expr" type="number" placeholder="500"></div>
-    <div class="fg"><label>Bio / Description</label><textarea id="exbi" rows="3"></textarea></div>
-    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveExpert()"><i class="fas fa-check"></i> Submit</button>`);
+    <div class="fg"><label>Expertise <span style="color:var(--sub);font-size:11px">(comma separated)</span></label>
+      <input id="exex" placeholder="e.g. System Design, React, DSA" value="${escHtml((existing?.expertise||[]).join(', '))}"></div>
+    <div class="fg"><label>Price per session (₹)</label>
+      <input id="expr" type="number" placeholder="500" value="${existing?.price_per_session||''}"></div>
+    <div class="fg"><label>Meeting Link <span style="color:var(--sub);font-size:11px">(Zoom / Google Meet / Teams)</span></label>
+      <input id="exlink" type="url" placeholder="https://zoom.us/j/..." value="${escHtml(existing?.meeting_link||'')}"></div>
+    <div class="fg"><label>Bio / Description</label>
+      <textarea id="exbi" rows="2">${escHtml(existing?.bio||'')}</textarea></div>
+    <div class="fg"><label>Availability Slots <span style="color:var(--sub);font-size:11px">(add your open times)</span></label>
+      <div id="slotlist" style="margin-bottom:8px">${slots.map(s=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)">
+        <span style="flex:1">${new Date(s.key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+        ${s.booked?'<span style="font-size:11px;color:#ef4444">Booked</span>':'<button type="button" onclick="removeSlot(\''+s.key+'\')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>'}
+      </div>`).join('')}</div>
+      <div style="display:flex;gap:8px">
+        <input type="datetime-local" id="exslot" style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px">
+        <button type="button" class="btn btn-o btn-sm" onclick="addSlot()"><i class="fas fa-plus"></i> Add</button>
+      </div>
+    </div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveExpert()"><i class="fas fa-check"></i> Save Profile</button>
+    <script>window._exSlots=${slotsJson};<\/script>`);
+}
+function addSlot() {
+  const val = document.getElementById('exslot')?.value; if (!val) { toast('Pick a date and time'); return; }
+  window._exSlots = window._exSlots || [];
+  const key = new Date(val).toISOString();
+  if (window._exSlots.find(s=>s.key===key)) { toast('Slot already added'); return; }
+  window._exSlots.push({ key, booked: false });
+  document.getElementById('exslot').value = '';
+  const list = document.getElementById('slotlist');
+  if (list) {
+    const div = document.createElement('div');
+    div.setAttribute('data-slot', key);
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)';
+    div.innerHTML = `<span style="flex:1">${new Date(key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><button type="button" onclick="removeSlot('${key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>`;
+    list.appendChild(div);
+  }
+}
+function removeSlot(key) {
+  window._exSlots = (window._exSlots||[]).filter(s=>s.key!==key);
+  document.querySelector('[data-slot="'+key+'"]')?.remove();
 }
 async function saveExpert() {
-  const b = { expertise: document.getElementById('exex').value, price_per_session: parseInt(document.getElementById('expr').value) || 0, bio: document.getElementById('exbi').value };
-  if (!b.expertise) { toast('Expertise required'); return; }
-  const jitsi = `https://meet.jit.si/Nexus-${Date.now()}`;
-  await api('/api/experts/me', { method: 'POST', body: JSON.stringify({ ...b, expertise: b.expertise.split(',').map(s=>s.trim()).filter(Boolean), booking_url: jitsi }) }); closeModal(); toast('Profile submitted! 🎓'); renderExperts();
+  const expertise = document.getElementById('exex')?.value||'';
+  const price_per_session = parseInt(document.getElementById('expr')?.value)||500;
+  const meeting_link = document.getElementById('exlink')?.value||'';
+  const bio = document.getElementById('exbi')?.value||'';
+  if (!expertise) { toast('Expertise required'); return; }
+  if (meeting_link && !meeting_link.startsWith('http')) { toast('Meeting link must start with http'); return; }
+  await api('/api/experts/me', { method:'POST', body: JSON.stringify({ expertise: expertise.split(',').map(s=>s.trim()).filter(Boolean), price_per_session, meeting_link, bio, availability_slots: window._exSlots||[] }) });
+  closeModal(); toast('Profile saved! 🎓'); renderExperts();
 }
 
 // ── JOBS ──────────────────────────────────────────────────────────────────
