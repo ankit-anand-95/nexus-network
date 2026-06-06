@@ -100,8 +100,9 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 /* POSTS */
 .post{padding:0}
 .post-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px 0}
-.post-hdr .pinfo h4{font-size:14px;font-weight:700;margin:0 0 2px}
-.post-hdr .pinfo p{font-size:12px;color:var(--sub);margin:0}
+.post-hdr .pinfo{flex:1;min-width:0;overflow:hidden}
+.post-hdr .pinfo h4{font-size:14px;font-weight:700;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-hdr .pinfo p{font-size:12px;color:var(--sub);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .post-body{padding:12px 20px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .post-img{width:100%;max-height:480px;object-fit:cover;border-radius:0}
 .post-acts{display:flex;align-items:center;gap:2px;padding:6px 8px;border-top:1px solid var(--border)}
@@ -1947,8 +1948,54 @@ async function saveRev() {
 
 // ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
 async function renderExperts() {
-  const d = await api('/api/experts');
-  const cards = Array.isArray(d) && d.length ? d.filter(e => e.user_id != me?.id).map(e => {
+  const [d, myProfile] = await Promise.all([api('/api/experts'), api('/api/experts/me')]);
+  const isMentor = myProfile && myProfile.user_id;
+
+  // Build "My Mentorship Dashboard" section if user is a mentor
+  let dashHtml = '';
+  if (isMentor) {
+    const sessions = await api('/api/sessions?role=expert').catch(() => []);
+    const sessArr = Array.isArray(sessions) ? sessions : [];
+    const statusColor = { pending:'#f59e0b', confirmed:'#22c55e', completed:'#6b7280', cancelled:'#ef4444' };
+    const statusLabel = { pending:'⏳ Pending', confirmed:'✅ Confirmed', completed:'✔ Completed', cancelled:'✖ Cancelled' };
+    const sessRows = sessArr.length ? sessArr.map(s => {
+      const dt = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'TBD';
+      const col = statusColor[s.status] || '#6b7280';
+      const lbl = statusLabel[s.status] || s.status;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
+        ${av({name:s.learner_name,avatar_url:s.learner_avatar},'av40')}
+        <div style="flex:1;min-width:0">
+          <p style="margin:0 0 2px;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.learner_name||'Learner')}</p>
+          <p style="margin:0;font-size:12px;color:var(--sub)">${escHtml(s.topic||s.session_type||'')} &bull; ${dt}</p>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${col};white-space:nowrap">${lbl}</span>
+        ${s.status==='pending' ? `<div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm" style="background:#dcfce7;color:#16a34a;border:1.5px solid #bbf7d0" onclick="respondSession(${s.id},'confirmed')"><i class="fas fa-check"></i> Accept</button>
+          <button class="btn btn-sm" style="background:#fef2f2;color:#ef4444;border:1.5px solid #fecaca" onclick="respondSession(${s.id},'cancelled')"><i class="fas fa-times"></i> Decline</button>
+        </div>` : ''}
+      </div>`;
+    }).join('') : `<div style="padding:24px;text-align:center;color:var(--sub);font-size:13px"><i class="fas fa-inbox" style="font-size:28px;opacity:.4;display:block;margin-bottom:8px"></i>No bookings yet</div>`;
+    const expertiseStr = Array.isArray(myProfile.expertise) ? myProfile.expertise.join(', ') : (myProfile.expertise||'');
+    dashHtml = `<div class="card" style="margin-bottom:20px">
+      <div class="ch" style="display:flex;align-items:center;justify-content:space-between">
+        <span>🎓 My Mentorship</span>
+        <button class="btn btn-o btn-sm" onclick="showExpertForm()"><i class="fas fa-pen"></i> Edit Profile</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)">
+        ${av(me,'av48')}
+        <div>
+          <p style="margin:0 0 2px;font-weight:700;font-size:14px">${escHtml(me.name||'')}</p>
+          <p style="margin:0;font-size:12px;color:var(--primary)">${escHtml(expertiseStr)}</p>
+          <p style="margin:0;font-size:12px;color:var(--sub)">₹${myProfile.price_per_session||0}/session &bull; ${sessArr.filter(s=>s.status==='pending').length} pending request${sessArr.filter(s=>s.status==='pending').length!==1?'s':''}</p>
+        </div>
+      </div>
+      <div>${sessRows}</div>
+    </div>`;
+  }
+
+  // Build cards for other mentors
+  const others = Array.isArray(d) ? d.filter(e => e.user_id != me?.id) : [];
+  const cards = others.length ? others.map(e => {
     const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || '');
     const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
     const freeSlots = slots.filter(s => !s.booked).length;
@@ -1962,11 +2009,20 @@ async function renderExperts() {
       ${totalSlots ? `<p class="slot-count" style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p class="slot-count" style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
       <button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name||'Mentor')}')"><i class="fas fa-video"></i> Book Session</button>
     </div>`;
-  }).join('') : '<div class="card empty" style="text-align:center;padding:40px"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No other mentors yet</p></div>';
+  }).join('') : `<div class="card empty" style="text-align:center;padding:40px;grid-column:1/-1"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No other mentors yet</p></div>`;
+
   document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
-    <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
-    <div class="sug-grid">${cards}</div>
+    <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1>${!isMentor ? '<button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button>' : ''}</div>
+    ${dashHtml}
+    ${others.length || !isMentor ? `<h3 style="font-size:14px;font-weight:700;color:var(--sub);margin:0 0 12px;text-transform:uppercase;letter-spacing:.5px">Available Mentors</h3><div class="sug-grid">${cards}</div>` : ''}
   </div>`;
+}
+async function respondSession(id, status) {
+  const r = await api('/api/sessions/' + id, { method:'PUT', body: JSON.stringify({ status }) });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  toast(status === 'confirmed' ? 'Session accepted! ✅' : 'Session declined.');
+  apiInvalidate('/api/sessions');
+  renderExperts();
 }
 async function bookSession(expertId, expertName) {
   const experts = await api('/api/experts');
@@ -2078,7 +2134,41 @@ async function renderJobs() {
 }
 function rJobList(d) {
   if (!d.length) return '<div class="card empty"><i class="fas fa-briefcase" style="font-size:40px"></i><p>No jobs found</p></div>';
-  return d.map(j => `<div class="card"><div class="ji"><div class="fb" style="margin-bottom:8px"><div><h3>${j.title}</h3><p class="jco">${j.company}</p></div>${j.poster_avatar ? `<img src="${j.poster_avatar}" class="av av48" style="object-fit:cover;border-radius:50%">` : av({ name: j.poster_name }, 'av48')}</div><div class="jmeta"><span><i class="fas fa-location-dot"></i>${j.location || 'Not specified'}</span><span><i class="fas fa-clock"></i>${j.job_type}</span>${j.salary_range ? `<span><i class="fas fa-indian-rupee-sign"></i>${j.salary_range}</span>` : ''}<span><i class="fas fa-users"></i>${j.applications_count} applicants</span><span><i class="fas fa-calendar"></i>${timeAgo(j.created_at)}</span></div>${j.description ? `<p class="jdesc">${j.description.slice(0, 200)}${j.description.length > 200 ? '…' : ''}</p>` : ''}<div style="display:flex;gap:8px;margin-top:12px">${j.applied ? '<button class="btn btn-g btn-sm" disabled><i class="fas fa-check"></i> Applied</button>' : `<button class="btn btn-p btn-sm" onclick="showApply(${j.id},'${j.title.replace(/'/g, '&apos;')}')"><i class="fas fa-paper-plane"></i> Easy Apply</button>`}<button class="btn btn-o btn-sm" onclick="this.innerHTML='<i class=&quot;fas fa-bookmark&quot;></i> Saved';toast('Saved!')"><i class="far fa-bookmark"></i> Save</button></div></div></div>`).join('');
+  return d.map(j => {
+    const isMine = j.poster_id == me?.id;
+    const actionBtns = isMine
+      ? `<button class="btn btn-o btn-sm" onclick="editJob(${j.id})"><i class="fas fa-pen"></i> Edit</button>
+         <button class="btn btn-sm" style="background:#fef2f2;color:#ef4444;border:1.5px solid #fecaca" onclick="closeJob(${j.id})"><i class="fas fa-times-circle"></i> Close Job</button>`
+      : j.applied
+        ? '<button class="btn btn-g btn-sm" disabled><i class="fas fa-check"></i> Applied</button>'
+        : `<button class="btn btn-p btn-sm" onclick="showApply(${j.id},'${j.title.replace(/'/g,'&apos;')}')"><i class="fas fa-paper-plane"></i> Easy Apply</button>`;
+    return `<div class="card"><div class="ji"><div class="fb" style="margin-bottom:8px"><div><h3>${escHtml(j.title)}</h3><p class="jco">${escHtml(j.company)}</p></div>${j.poster_avatar ? `<img src="${j.poster_avatar}" class="av av48" style="object-fit:cover;border-radius:50%">` : av({ name: j.poster_name }, 'av48')}</div><div class="jmeta"><span><i class="fas fa-location-dot"></i>${j.location || 'Not specified'}</span><span><i class="fas fa-clock"></i>${j.job_type}</span>${j.salary_range ? `<span><i class="fas fa-indian-rupee-sign"></i>${j.salary_range}</span>` : ''}<span><i class="fas fa-users"></i>${j.applications_count} applicants</span><span><i class="fas fa-calendar"></i>${timeAgo(j.created_at)}</span>${isMine ? '<span style="color:var(--primary);font-weight:700"><i class="fas fa-star"></i> Your post</span>' : ''}</div>${j.description ? `<p class="jdesc">${j.description.slice(0, 200)}${j.description.length > 200 ? '…' : ''}</p>` : ''}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">${actionBtns}${!isMine ? `<button class="btn btn-o btn-sm" onclick="this.innerHTML='<i class=&quot;fas fa-bookmark&quot;></i> Saved';toast('Saved!')"><i class="far fa-bookmark"></i> Save</button>` : ''}</div></div></div>`;
+  }).join('');
+}
+async function editJob(id) {
+  const jobs = window._jd || [];
+  const j = jobs.find(x => x.id == id);
+  if (!j) { toast('Job not found'); return; }
+  showModal(`<h2 style="margin-bottom:16px"><i class="fas fa-pen" style="color:var(--primary);margin-right:8px"></i>Edit Job</h2>
+    <div class="frow"><div class="fg"><label>Job Title *</label><input id="ejti" value="${escHtml(j.title)}"></div><div class="fg"><label>Company *</label><input id="ejco" value="${escHtml(j.company)}"></div></div>
+    <div class="frow"><div class="fg"><label>Location</label><input id="ejlo" value="${escHtml(j.location||'')}"></div><div class="fg"><label>Type</label><select id="ejty"><option${j.job_type==='Full-time'?' selected':''}>Full-time</option><option${j.job_type==='Part-time'?' selected':''}>Part-time</option><option${j.job_type==='Contract'?' selected':''}>Contract</option><option${j.job_type==='Internship'?' selected':''}>Internship</option><option${j.job_type==='Remote'?' selected':''}>Remote</option></select></div></div>
+    <div class="fg"><label>Salary Range</label><input id="ejsa" value="${escHtml(j.salary_range||'')}"></div>
+    <div class="fg"><label>Description</label><textarea id="ejde" rows="4">${escHtml(j.description||'')}</textarea></div>
+    <div class="fg"><label>Requirements</label><textarea id="ejre" rows="3">${escHtml(j.requirements||'')}</textarea></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="updateJob(${id})"><i class="fas fa-check"></i> Save Changes</button>`);
+}
+async function updateJob(id) {
+  const b = { title: document.getElementById('ejti').value, company: document.getElementById('ejco').value, location: document.getElementById('ejlo').value, job_type: document.getElementById('ejty').value, salary_range: document.getElementById('ejsa').value, description: document.getElementById('ejde').value, requirements: document.getElementById('ejre').value };
+  if (!b.title || !b.company) { toast('Title and company required'); return; }
+  const r = await api('/api/jobs/' + id, { method: 'PATCH', body: JSON.stringify(b) });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  apiInvalidate('/api/jobs'); closeModal(); toast('Job updated! ✏️'); renderJobs();
+}
+async function closeJob(id) {
+  if (!confirm('Close this job? It will no longer appear in listings.')) return;
+  const r = await api('/api/jobs/' + id, { method: 'DELETE' });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  apiInvalidate('/api/jobs'); toast('Job closed.'); renderJobs();
 }
 function filJobs() { const q = document.getElementById('jq').value.toLowerCase(); const t = document.getElementById('jt').value; document.getElementById('jlist').innerHTML = rJobList((window._jd || []).filter(j => (!q || (j.title + j.company + (j.description || '')).toLowerCase().includes(q)) && (!t || j.job_type === t))); }
 function showApply(id, title) {

@@ -977,9 +977,27 @@ app.post('/api/jobs/:id/apply', auth, (req, res) => {
   const { cover_letter } = req.body;
   try {
     db.prepare(`INSERT INTO job_applications (job_id, applicant_id, cover_letter) VALUES (?, ?, ?)`).run(req.params.id, req.user.id, cover_letter||'');
-db.prepare(`UPDATE jobs SET applications_count=applications_count+1 WHERE id=?`).run(req.params.id);
+    db.prepare(`UPDATE jobs SET applications_count=applications_count+1 WHERE id=?`).run(req.params.id);
     res.json({ ok: true });
   } catch { res.status(400).json({ error: 'Already applied' }); }
+});
+
+app.patch('/api/jobs/:id', auth, (req, res) => {
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Not found' });
+  if (job.poster_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  const { title, company, location, job_type, salary_range, description, requirements } = req.body;
+  db.prepare('UPDATE jobs SET title=COALESCE(?,title), company=COALESCE(?,company), location=COALESCE(?,location), job_type=COALESCE(?,job_type), salary_range=COALESCE(?,salary_range), description=COALESCE(?,description), requirements=COALESCE(?,requirements) WHERE id=?')
+    .run(title||null, company||null, location||null, job_type||null, salary_range||null, description||null, requirements||null, req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/jobs/:id', auth, (req, res) => {
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Not found' });
+  if (job.poster_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  db.prepare('UPDATE jobs SET is_active=0 WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 
@@ -1195,6 +1213,38 @@ app.get('/api/trending', auth, (req, res) => {
     AND content LIKE '%#%'
     LIMIT 500
   `).all();
+  const tagCount = {};
+  tagRows.forEach(p => {
+    const tags = (p.content || '').match(/#[\w]+/g) || [];
+    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
+  });
+  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
+  _trendingCache = { top_posts: topPosts, trending_tags };
+  _trendingTs = Date.now();
+  res.json(_trendingCache);
+});
+60 * 1000) {
+    return res.json(_trendingCache);
+  }
+  const topPosts = db.prepare(`
+    SELECT p.id, p.content, u.name as author_name, u.avatar_url as author_avatar,
+      COUNT(pr.id) as reaction_count, COUNT(DISTINCT c.id) as comment_count
+    FROM posts p
+    LEFT JOIN users u ON p.author_id=u.id
+    LEFT JOIN post_reactions pr ON pr.post_id=p.id
+    LEFT JOIN comments c ON c.post_id=p.id
+    WHERE p.is_published=1 AND p.is_anonymous=0
+      AND p.created_at > datetime('now','-7 days')
+    GROUP BY p.id
+    ORDER BY reaction_count DESC, comment_count DESC
+    LIMIT 5
+  \`).all();
+  const tagRows = db.prepare(`
+    SELECT content FROM posts
+    WHERE is_published=1 AND created_at > datetime('now','-7 days')
+    AND content LIKE '%#%'
+    LIMIT 500
+  \`).all();
   const tagCount = {};
   tagRows.forEach(p => {
     const tags = (p.content || '').match(/#[\w]+/g) || [];
