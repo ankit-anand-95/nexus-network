@@ -924,20 +924,42 @@ app.post('/api/mentor-sessions/:id/book-slot', auth, (req, res) => {
   res.json({ ok: true, meeting_link: ms.meeting_link, session_id: sessionInfo.lastInsertRowid });
 });
 
-// ── EXPERTS (backward compat + new mentor_sessions) ──────────────────────
+// ── EXPERTS (union of mentor_sessions + legacy expert_profiles) ──────────
 app.get('/api/experts', auth, (req, res) => {
-  // Return mentor_sessions (new multi-session system)
-  const sessions = db.prepare(`
-    SELECT ms.*, u.name, u.headline, u.avatar_url, u.location,
+  // New sessions from mentor_sessions table
+  const newSessions = db.prepare(`
+    SELECT ms.id, ms.user_id, ms.title, ms.expertise, ms.price_per_session,
+      ms.meeting_link, ms.bio, ms.availability_slots,
+      u.name, u.headline, u.avatar_url, u.location,
       COALESCE(ep.rating, 0) as rating, COALESCE(ep.rating_count, 0) as rating_count,
-      COALESCE(ep.total_sessions, 0) as total_sessions
+      COALESCE(ep.total_sessions, 0) as total_sessions,
+      'new' as source
     FROM mentor_sessions ms
     JOIN users u ON ms.user_id = u.id
     LEFT JOIN expert_profiles ep ON ep.user_id = ms.user_id
     WHERE ms.is_active=1
-    ORDER BY ep.rating DESC, ms.created_at DESC
   `).all();
-  res.json(sessions.map(s => ({ ...s, availability_slots: JSON.parse(s.availability_slots || '[]') })));
+
+  // Legacy sessions from expert_profiles (only if user has no mentor_sessions)
+  const legacySessions = db.prepare(`
+    SELECT ep.id, ep.user_id, 'Mentorship Session' as title,
+      ep.expertise, ep.price_per_session, ep.meeting_link, ep.bio,
+      ep.availability_slots, u.name, u.headline, u.avatar_url, u.location,
+      ep.rating, ep.rating_count, ep.total_sessions,
+      'legacy' as source
+    FROM expert_profiles ep
+    JOIN users u ON ep.user_id = u.id
+    WHERE ep.is_available=1
+      AND ep.user_id NOT IN (SELECT user_id FROM mentor_sessions WHERE is_active=1)
+  `).all();
+
+  const all = [...newSessions, ...legacySessions].sort((a,b) => b.rating - a.rating);
+  res.json(all.map(s => ({
+    ...s,
+    expertise: typeof s.expertise === 'string' && s.expertise.startsWith('[')
+      ? JSON.parse(s.expertise) : s.expertise,
+    availability_slots: JSON.parse(s.availability_slots || '[]')
+  })));
 });
 
 app.get('/api/experts/me', auth, (req, res) => {

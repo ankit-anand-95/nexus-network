@@ -2432,15 +2432,17 @@ async function saveSessionForm() {
   if (!expertise) { toast('Expertise is required'); return; }
   if (meeting_link && !meeting_link.startsWith('http')) { toast('Meeting link must start with http'); return; }
   const body = { title, expertise, price_per_session, meeting_link, bio, availability_slots: window._exSlots||[] };
+  let r;
   if (window._editSessionId) {
-    await api(`/api/mentor-sessions/${window._editSessionId}`, { method:'PUT', body: JSON.stringify(body) });
-    toast('Session updated! ✓');
+    r = await api(`/api/mentor-sessions/${window._editSessionId}`, { method:'PUT', body: JSON.stringify(body) });
   } else {
-    await api('/api/mentor-sessions', { method:'POST', body: JSON.stringify(body) });
-    toast('Session created! 🎓');
+    r = await api('/api/mentor-sessions', { method:'POST', body: JSON.stringify(body) });
   }
-  apiInvalidate(''); // clear all cache to force fresh fetch
-  closeModal(); renderExperts();
+  if (r && r.error) { toast('Error: ' + r.error); return; }
+  toast(window._editSessionId ? 'Session updated! ✓' : 'Session created! 🎓');
+  apiInvalidate('');
+  closeModal();
+  await renderExperts(); // await so dashboard is guaranteed fresh
 }
 
 // ── Slot picker support for session form ─────────────────────────────────
@@ -2476,19 +2478,6 @@ async function _standaloneslotpicker() {
   window._exSlots = Array.isArray(existing?.availability_slots) ? JSON.parse(JSON.stringify(existing.availability_slots)) : [];
   window._slotDate = null; window._slotHour = null;
   _renderSlotModal();
-}
-function _renderSlotModal() {
-  let modal = document.querySelector('#mbg .modal');
-  // Save scroll position before rebuild
-  const prevScroll = (document.getElementById('slot-day-scroll') || {}).scrollLeft || 0;
-  if (!modal) {
-    showModal(_buildSlotPickerHTML());
-  } else {
-    modal.innerHTML = '<button class="mclose" onclick="closeModal()">&#10005;</button>' + _buildSlotPickerHTML();
-  }
-  // Restore scroll position after rebuild
-  const sc = document.getElementById('slot-day-scroll');
-  if (sc) sc.scrollLeft = prevScroll;
 }
 // Helper: get local YYYY-MM-DD from a Date object
 function _localDateStr(d) {
