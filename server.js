@@ -1227,68 +1227,77 @@ app.patch('/api/sessions/:id/reschedule', auth, (req, res) => {
   if (session.learner_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
   if (['completed','cancelled'].includes(session.status)) return res.status(400).json({ error: 'Cannot reschedule this session' });
 
-  // Find the new slot — check mentor_sessions first (new system), then expert_profiles (legacy)
-  let foundMs = null, foundSlots = null, foundNewSlot = null;
+  // Load all mentor_sessions once — keyed by id so we can batch updates safely
+  // (old+new slot may be in the same row; separate writes would overwrite each other)
   const allMs = db.prepare('SELECT id, availability_slots FROM mentor_sessions WHERE user_id=? AND is_active=1').all(session.expert_id);
-  for (const ms of allMs) {
-    const slots = JSON.parse(ms.availability_slots || '[]');
+  const msMap = new Map(); // id → { ms, slots }
+  allMs.forEach(ms => msMap.set(ms.id, { ms, slots: JSON.parse(ms.availability_slots || '[]') }));
+
+  // Find which entry contains the NEW slot
+  let foundMsId = null, foundNewSlot = null;
+  for (const [id, { slots }] of msMap) {
     const s = slots.find(x => _sameSlot(x.key, new_slot_key));
-    if (s) { foundMs = ms; foundSlots = slots; foundNewSlot = s; break; }
+    if (s) { foundMsId = id; foundNewSlot = s; break; }
   }
 
   // Fallback: legacy expert_profiles
-  let foundEp = null, epSlots = null, epNewSlot = null;
+  let epData = null;
   if (!foundNewSlot) {
     const ep = db.prepare('SELECT user_id, availability_slots FROM expert_profiles WHERE user_id=?').get(session.expert_id);
     if (ep) {
       const slots = JSON.parse(ep.availability_slots || '[]');
       const s = slots.find(x => _sameSlot(x.key, new_slot_key));
-      if (s) { foundEp = ep; epSlots = slots; epNewSlot = s; }
+      if (s) epData = { slots, newSlot: s };
     }
   }
 
-  const targetSlot = foundNewSlot || epNewSlot;
+  const targetSlot = foundNewSlot || (epData && epData.newSlot);
   if (!targetSlot) return res.status(404).json({ error: 'Slot not found' });
   if (targetSlot.booked) return res.status(400).json({ error: 'That slot is already booked' });
   if (targetSlot.pending && targetSlot.pending_until && Date.now() < targetSlot.pending_until) {
     return res.status(409).json({ error: 'That slot has a pending booking. Try another.' });
   }
 
-  // Release old slot from wherever it lives
+  // Release old slot — modify the in-memory msMap entry (same map used for new slot)
   if (session.slot_key) {
-    allMs.forEach(ms => {
-      const slots = JSON.parse(ms.availability_slots || '[]');
+    for (const [, { slots }] of msMap) {
       const s = slots.find(x => _sameSlot(x.key, session.slot_key));
-      if (s) {
-        s.booked = false; delete s.booked_by; delete s.pending; delete s.pending_by; delete s.pending_until;
-        db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(slots), ms.id);
-      }
-    });
+      if (s) { s.booked = false; delete s.booked_by; delete s.pending; delete s.pending_by; delete s.pending_until; break; }
+    }
+    // Also release from expert_profiles (legacy)
     const ep = db.prepare('SELECT user_id, availability_slots FROM expert_profiles WHERE user_id=?').get(session.expert_id);
     if (ep) {
       const slots = JSON.parse(ep.availability_slots || '[]');
       const s = slots.find(x => _sameSlot(x.key, session.slot_key));
-      if (s) { s.booked = false; delete s.booked_by; db.prepare('UPDATE expert_profiles SET availability_slots=? WHERE user_id=?').run(JSON.stringify(slots), session.expert_id); }
+      if (s) { s.booked = false; delete s.booked_by; delete s.pending; delete s.pending_by; delete s.pending_until;
+        db.prepare('UPDATE expert_profiles SET availability_slots=? WHERE user_id=?').run(JSON.stringify(slots), session.expert_id); }
     }
   }
 
-  // Mark new slot as pending
+  // Mark new slot as pending (in the same in-memory map entry)
   targetSlot.pending = true; targetSlot.pending_by = req.user.id;
   targetSlot.pending_until = Date.now() + 5 * 60 * 1000;
-  if (foundMs) {
-    db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(foundSlots), foundMs.id);
-    io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: foundMs.id, slots: foundSlots });
-  } else if (foundEp) {
-    db.prepare('UPDATE expert_profiles SET availability_slots=? WHERE user_id=?').run(JSON.stringify(epSlots), session.expert_id);
+
+  // Flush all modified mentor_sessions in one pass — avoids overwrite conflicts
+  let newMsId = session.mentor_session_id;
+  msMap.forEach(({ ms, slots }) => {
+    db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(slots), ms.id);
+    io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: ms.id, slots });
+  });
+  if (foundMsId) newMsId = foundMsId;
+  if (epData) {
+    db.prepare('UPDATE expert_profiles SET availability_slots=? WHERE user_id=?').run(JSON.stringify(epData.slots), session.expert_id);
   }
 
   // Update the interview session
-  const newMsId = foundMs ? foundMs.id : session.mentor_session_id;
   db.prepare(`UPDATE interview_sessions SET scheduled_at=?, slot_key=?, status='pending', mentor_session_id=? WHERE id=?`).run(new_slot_key, new_slot_key, newMsId || null, session.id);
 
   const learner = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
-  createNotif(session.expert_id, req.user.id, 'session_rescheduled', session.id, learner.name + ' rescheduled their session — please confirm');
-  io.to('user_' + session.expert_id).emit('session_update', { sessionId: session.id, status: 'pending' });
+  const _sd = new Date(new_slot_key);
+  const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const readableSlot = _sd.toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  createNotif(session.expert_id, req.user.id, 'session_rescheduled', session.id, learner.name + ' rescheduled to ' + readableSlot + ' — please confirm');
+  io.to('user_' + session.expert_id).emit('session_update', { sessionId: session.id, status: 'rescheduled', meta: { learnerName: learner.name, scheduledAt: new_slot_key } });
   res.json({ ok: true });
 });
 
