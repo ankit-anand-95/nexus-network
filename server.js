@@ -872,7 +872,7 @@ app.get('/api/experts', auth, (req, res) => {
 app.get('/api/experts/me', auth, (req, res) => {
   const expert = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(req.user.id);
   if (!expert) return res.json(null);
-  res.json({ ...expert, expertise: JSON.parse(expert.expertise || '[]'), session_types: JSON.parse(expert.session_types || '[]') });
+  res.json({ ...expert, expertise: JSON.parse(expert.expertise || '[]'), session_types: JSON.parse(expert.session_types || '[]'), availability_slots: JSON.parse(expert.availability_slots || '[]') });
 });
 
 app.post('/api/experts/me', auth, (req, res) => {

@@ -18,7 +18,9 @@ nav{position:fixed;top:0;left:0;right:0;height:60px;background:var(--card);borde
 .nav-srch{position:relative;flex:0 0 260px}
 .nav-srch input{width:100%;padding:9px 12px 9px 36px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--inp);font-size:13px;color:var(--text);box-sizing:border-box;transition:border .2s}
 .nav-srch input:focus{outline:none;border-color:var(--primary)}
-.nav-srch i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:13px}
+.nav-srch>i{position:absolute;left:10px;top:22px;transform:translateY(-50%);color:var(--sub);font-size:13px;pointer-events:none}
+.srch-recent-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .12s}
+.srch-recent-item:hover{background:var(--indigo-light);color:var(--primary)}
 .nav-links{display:flex;gap:4px;margin-left:auto}
 .nb{display:flex;flex-direction:column;align-items:center;padding:6px 14px;border-radius:var(--r-sm);border:none;background:none;cursor:pointer;color:var(--sub);font-size:11px;gap:3px;transition:.15s;text-decoration:none;position:relative}
 .nb i{font-size:20px}
@@ -444,9 +446,13 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
       <div class="logo-icon">N</div>
       <span class="logo-txt">Nexus</span>
     </a>
-    <div class="nav-srch">
+    <div class="nav-srch" style="position:relative">
       <i class="fas fa-search"></i>
-      <input type="text" id="gsrch" placeholder="Search people, posts…" oninput="handleSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';go('home')}">
+      <input type="text" id="gsrch" placeholder="Search people, posts…" autocomplete="off"
+        oninput="handleSearch(this.value)"
+        onfocus="showRecentSearches()"
+        onkeydown="if(event.key==='Escape'){this.value='';hideSearchDrop();go('home')}else if(event.key==='Enter'&&this.value.trim()){addRecentSearch(this.value.trim());hideSearchDrop()}">
+      <div id="srch-drop" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:9999;overflow:hidden"></div>
     </div>
     <div class="nav-links">
       <button class="nb active" id="nb-home" onclick="go('home')"><i class="fas fa-house"></i>Home</button>
@@ -627,7 +633,10 @@ function toggleMeMenu() {
   }
 }
 function closeMe() { const m = document.getElementById('me-menu'); if (m) m.style.display = 'none'; }
-document.addEventListener('click', e => { if (!document.getElementById('me-wrap')?.contains(e.target)) closeMe(); });
+document.addEventListener('click', e => {
+  if (!document.getElementById('me-wrap')?.contains(e.target)) closeMe();
+  if (!e.target.closest('.nav-srch')) hideSearchDrop();
+});
 function updateMobDarkBtn() {
   const isDark = document.body.classList.contains('dark');
   const lbl = document.getElementById('mob-dark-lbl'); if (lbl) lbl.textContent = isDark ? 'Light Mode' : 'Dark Mode';
@@ -738,7 +747,7 @@ function initSocket() {
   socket.on('notification', data => {
     pollBadges();
     if (data?.content) {
-      const icons = { connection_request:'👤', connection_accepted:'🎉', like:'❤️', comment:'💬', session_booked:'📅' };
+      const icons = { connection_request:'👤', connection_accepted:'🎉', like:'❤️', comment:'💬', session_booked:'📅', session_confirmed:'✅', session_declined:'❌', session_cancelled:'🚫', session_rescheduled:'🔄' };
       toast(`${icons[data.type]||'🔔'} ${data.content}`);
     }
     if (data?.type === 'connection_request' && curPage === 'network') renderNetwork();
@@ -793,13 +802,20 @@ function initSocket() {
   });
 
   socket.on('mentor_slot_booked', ({ expertId, slots }) => {
-    // Update slot count on mentor card in real-time (if Mentors page is open)
+    if (curPage === 'experts') { apiInvalidate('/api/experts'); renderExperts(); return; }
     const card = document.querySelector(`[data-expert="${expertId}"]`);
     if (!card) return;
     const free = slots.filter(s => !s.booked).length;
     const total = slots.length;
     const el = card.querySelector('.slot-count');
     if (el) { el.textContent = `${free} of ${total} slots available`; el.style.color = free ? '#22c55e' : '#ef4444'; }
+  });
+
+  socket.on('session_update', ({ sessionId, status }) => {
+    if (curPage === 'experts') { apiInvalidate('/api/sessions'); apiInvalidate('/api/experts'); renderExperts(); }
+    const msgs = { confirmed: '✅ Your session was accepted!', cancelled: 'Your session request was declined.' };
+    if (msgs[status]) toast(msgs[status]);
+    pollBadges();
   });
 
   socket.on('post_reacted', ({ postId, reactions, my_reaction_by }) => {
@@ -992,8 +1008,52 @@ async function doReset(token) {
 let _srchTimer = null;
 function handleSearch(v) {
   clearTimeout(_srchTimer);
-  if (!v.trim()) { if (curPage === 'search') go('home'); return; }
-  _srchTimer = setTimeout(() => renderSearch(v.trim()), 350);
+  if (!v.trim()) { hideSearchDrop(); if (curPage === 'search') go('home'); return; }
+  hideSearchDrop();
+  _srchTimer = setTimeout(() => { addRecentSearch(v.trim()); renderSearch(v.trim()); }, 350);
+}
+
+// Recent searches (LinkedIn-style)
+function addRecentSearch(q) {
+  if (!q || q.length < 2) return;
+  let r = JSON.parse(localStorage.getItem('nxrecent') || '[]');
+  r = [q, ...r.filter(x => x !== q)].slice(0, 6);
+  localStorage.setItem('nxrecent', JSON.stringify(r));
+}
+function showRecentSearches() {
+  const r = JSON.parse(localStorage.getItem('nxrecent') || '[]');
+  const drop = document.getElementById('srch-drop');
+  if (!drop || !r.length) return;
+  drop.innerHTML = `
+    <div style="padding:8px 14px 4px;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px">Recent</div>
+    ${r.map(q => `<div class="srch-recent-item" onclick="doRecentSearch('${q.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}')">
+      <i class="fas fa-clock-rotate-left" style="color:var(--sub);width:14px;font-size:11px"></i>
+      <span style="flex:1;font-size:13px">${escHtml(q)}</span>
+      <button onclick="event.stopPropagation();removeRecentSearch('${q.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}')" style="background:none;border:none;cursor:pointer;color:var(--sub);padding:2px 4px;font-size:11px"><i class="fas fa-xmark"></i></button>
+    </div>`).join('')}
+    <div style="padding:6px 14px 8px;border-top:1px solid var(--border);margin-top:4px">
+      <button onclick="clearRecentSearches()" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:12px;width:100%;text-align:center">Clear all</button>
+    </div>`;
+  drop.style.display = 'block';
+}
+function hideSearchDrop() {
+  const d = document.getElementById('srch-drop'); if (d) d.style.display = 'none';
+}
+function doRecentSearch(q) {
+  const inp = document.getElementById('gsrch');
+  if (inp) inp.value = q;
+  hideSearchDrop();
+  renderSearch(q);
+}
+function removeRecentSearch(q) {
+  let r = JSON.parse(localStorage.getItem('nxrecent') || '[]');
+  r = r.filter(x => x !== q);
+  localStorage.setItem('nxrecent', JSON.stringify(r));
+  showRecentSearches();
+  if (!r.length) hideSearchDrop();
+}
+function clearRecentSearches() {
+  localStorage.removeItem('nxrecent'); hideSearchDrop();
 }
 async function renderSearch(q) {
   curPage = 'search';
@@ -1969,7 +2029,23 @@ async function renderExperts() {
     const expSess = await api('/api/sessions?role=expert').catch(() => []);
     const ea = Array.isArray(expSess) ? expSess : [];
     const pendingCount = ea.filter(s => s.status === 'pending').length;
+    const confirmedCount = ea.filter(s => s.status === 'confirmed').length;
+    const cancelledCount = ea.filter(s => s.status === 'cancelled').length;
     const expertiseStr = Array.isArray(myProfile.expertise) ? myProfile.expertise.join(', ') : (myProfile.expertise || '');
+    // Slot stats
+    const mySlots = Array.isArray(myProfile.availability_slots) ? myProfile.availability_slots :
+      (typeof myProfile.availability_slots === 'string' ? JSON.parse(myProfile.availability_slots || '[]') : []);
+    const totalSlots = mySlots.length;
+    const bookedSlots = mySlots.filter(s => s.booked).length;
+    const freeSlots = totalSlots - bookedSlots;
+    const slotStatsHtml = `<div style="display:flex;gap:14px;padding:10px 20px;background:var(--indigo-light);border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:var(--primary)">${totalSlots}</div><div style="font-size:11px;color:var(--sub)">Total Slots</div></div>
+      <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#22c55e">${freeSlots}</div><div style="font-size:11px;color:var(--sub)">Available</div></div>
+      <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#f59e0b">${bookedSlots}</div><div style="font-size:11px;color:var(--sub)">Booked</div></div>
+      <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#f59e0b">${pendingCount}</div><div style="font-size:11px;color:var(--sub)">Pending</div></div>
+      <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#22c55e">${confirmedCount}</div><div style="font-size:11px;color:var(--sub)">Confirmed</div></div>
+      <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#6b7280">${cancelledCount}</div><div style="font-size:11px;color:var(--sub)">Cancelled</div></div>
+    </div>`;
     const sessRows = ea.length ? ea.map(s => `
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
         ${av({ name: s.learner_name, avatar_url: s.learner_avatar }, 'av40')}
@@ -1985,9 +2061,12 @@ async function renderExperts() {
         ${s.status === 'confirmed' && s.meeting_link ? `<a href="${s.meeting_link}" target="_blank" class="btn btn-o btn-sm"><i class="fas fa-video"></i> Join</a>` : ''}
       </div>`).join('') : `<div style="padding:24px;text-align:center;color:var(--sub);font-size:13px"><i class="fas fa-inbox" style="font-size:28px;opacity:.4;display:block;margin-bottom:8px"></i>No bookings yet</div>`;
     mentorDash = `<div class="card" style="margin-bottom:20px">
-      <div class="ch" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="ch" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>🎓 My Mentorship <span style="background:var(--primary);color:#fff;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px;font-weight:700">${ea.length}</span></span>
-        <div style="display:flex;gap:8px"><button class="btn btn-o btn-sm" onclick="showExpertForm()"><i class="fas fa-pen"></i> Edit Profile</button></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="background:var(--indigo-light);color:var(--primary);border:1.5px solid var(--primary)" onclick="showAddSlot()"><i class="fas fa-calendar-plus"></i> Add Slot</button>
+          <button class="btn btn-o btn-sm" onclick="showExpertProfile()"><i class="fas fa-pen"></i> Edit Profile</button>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)">
         ${av(me, 'av48')}
@@ -1997,6 +2076,7 @@ async function renderExperts() {
           <p style="margin:0;font-size:12px;color:var(--sub)">₹${myProfile.price_per_session || 0}/session &bull; ${pendingCount > 0 ? `<strong style="color:#f59e0b">${pendingCount} pending request${pendingCount !== 1 ? 's' : ''}</strong>` : 'No pending requests'}</p>
         </div>
       </div>
+      ${slotStatsHtml}
       <div>${sessRows}</div>
     </div>`;
   }
@@ -2171,11 +2251,13 @@ async function confirmBookSlot(expertId, slotKey, expertName, meetingLink) {
     <button class="btn btn-p" style="width:100%;justify-content:center" onclick="closeModal();renderExperts()"><i class="fas fa-check"></i> Got it</button>
   </div>`);
 }
+// ── showExpertForm: first-time "Offer Mentoring" (no pre-fill) ──────────────
 async function showExpertForm() {
   const existing = await api('/api/experts/me');
-  const slots = Array.isArray(existing?.availability_slots) ? existing.availability_slots : [];
-  const slotsJson = JSON.stringify(slots);
-  showModal(`<h2 style="margin-bottom:16px">Offer Mentoring</h2>
+  // Pre-fill only if they already have a profile (editing), blank for new mentors
+  const isNew = !existing;
+  showModal(`<h2 style="margin-bottom:4px"><i class="fas fa-chalkboard-teacher" style="color:var(--primary);margin-right:8px"></i>${isNew ? 'Offer Mentoring' : 'Edit Mentor Profile'}</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Set up your mentor profile — learners will see this when booking sessions</p>
     <div class="fg"><label>Expertise <span style="color:var(--sub);font-size:11px">(comma separated)</span></label>
       <input id="exex" placeholder="e.g. System Design, React, DSA" value="${escHtml((existing?.expertise||[]).join(', '))}"></div>
     <div class="fg"><label>Price per session (₹)</label>
@@ -2184,45 +2266,125 @@ async function showExpertForm() {
       <input id="exlink" type="url" placeholder="https://zoom.us/j/..." value="${escHtml(existing?.meeting_link||'')}"></div>
     <div class="fg"><label>Bio / Description</label>
       <textarea id="exbi" rows="2">${escHtml(existing?.bio||'')}</textarea></div>
-    <div class="fg"><label>Availability Slots <span style="color:var(--sub);font-size:11px">(add your open times)</span></label>
-      <div id="slotlist" style="margin-bottom:8px">${slots.map(s=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)"><span style="flex:1">${new Date(s.key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>${s.booked?'<span style="font-size:11px;color:#ef4444">Booked</span>':'<button type="button" onclick="removeSlot(\''+s.key+'\')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>'}</div>`).join('')}</div>
-      <div style="display:flex;gap:8px">
-        <input type="datetime-local" id="exslot" style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px">
-        <button type="button" class="btn btn-o btn-sm" onclick="addSlot()"><i class="fas fa-plus"></i> Add</button>
-      </div>
-    </div>
-    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveExpert()"><i class="fas fa-check"></i> Save Profile</button>
-    <script>window._exSlots=${slotsJson};<\/script>`);
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveExpertProfile()"><i class="fas fa-check"></i> Save Profile</button>`);
 }
-function addSlot() {
-  const val = document.getElementById('exslot')?.value; if (!val) { toast('Pick a date and time'); return; }
-  window._exSlots = window._exSlots || [];
-  const key = new Date(val).toISOString();
-  if (window._exSlots.find(s=>s.key===key)) { toast('Slot already added'); return; }
-  window._exSlots.push({ key, booked: false });
-  document.getElementById('exslot').value = '';
-  const list = document.getElementById('slotlist');
-  if (list) {
-    const div = document.createElement('div');
-    div.setAttribute('data-slot', key);
-    div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)';
-    div.innerHTML = `<span style="flex:1">${new Date(key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><button type="button" onclick="removeSlot('${key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>`;
-    list.appendChild(div);
-  }
-}
-function removeSlot(key) {
-  window._exSlots = (window._exSlots||[]).filter(s=>s.key!==key);
-  document.querySelector('[data-slot="'+key+'"]')?.remove();
-}
-async function saveExpert() {
+
+// ── showExpertProfile: edit profile only (no slots) ────────────────────────
+async function showExpertProfile() { return showExpertForm(); }
+
+// ── saveExpertProfile: persists profile fields, keeps existing slots ────────
+async function saveExpertProfile() {
   const expertise = document.getElementById('exex')?.value||'';
   const price_per_session = parseInt(document.getElementById('expr')?.value)||500;
   const meeting_link = document.getElementById('exlink')?.value||'';
   const bio = document.getElementById('exbi')?.value||'';
-  if (!expertise) { toast('Expertise required'); return; }
+  if (!expertise) { toast('Expertise is required'); return; }
   if (meeting_link && !meeting_link.startsWith('http')) { toast('Meeting link must start with http'); return; }
-  await api('/api/experts/me', { method:'POST', body: JSON.stringify({ expertise: expertise.split(',').map(s=>s.trim()).filter(Boolean), price_per_session, meeting_link, bio, availability_slots: window._exSlots||[] }) });
-  closeModal(); toast('Profile saved! 🎓'); renderExperts();
+  // Fetch current slots to preserve them
+  const existing = await api('/api/experts/me');
+  const currentSlots = Array.isArray(existing?.availability_slots) ? existing.availability_slots : [];
+  await api('/api/experts/me', { method:'POST', body: JSON.stringify({
+    expertise: expertise.split(',').map(s=>s.trim()).filter(Boolean),
+    price_per_session, meeting_link, bio,
+    availability_slots: currentSlots
+  })});
+  apiInvalidate('/api/experts'); closeModal(); toast('Profile saved! 🎓'); renderExperts();
+}
+
+// ── showAddSlot: custom date+time slot picker (no past, no pre-fill) ─────────
+async function showAddSlot() {
+  const existing = await api('/api/experts/me');
+  window._exSlots = Array.isArray(existing?.availability_slots) ? JSON.parse(JSON.stringify(existing.availability_slots)) : [];
+  window._slotDate = null; window._slotHour = null;
+  _renderSlotModal();
+}
+function _renderSlotModal() {
+  const modal = document.getElementById('modal');
+  if (!modal) return;
+  modal.innerHTML = _buildSlotPickerHTML();
+  document.getElementById('modal-bg').style.display = 'flex';
+}
+function _buildSlotPickerHTML() {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const days = []; const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for (let i=0; i<21; i++) { const d=new Date(now); d.setDate(d.getDate()+i); days.push(d); }
+  const dayChips = days.map((d,i) => {
+    const val = d.toISOString().split('T')[0];
+    const sel = window._slotDate === val;
+    const lbl = i===0 ? 'Today' : DAYS[d.getDay()];
+    return `<button onclick="_spDate('${val}')" style="flex-shrink:0;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid ${sel?'var(--primary)':'var(--border)'};background:${sel?'var(--primary)':'var(--inp)'};color:${sel?'#fff':'var(--text)'};cursor:pointer;text-align:center;min-width:56px;transition:.1s">
+      <div style="font-size:10px;font-weight:700">${lbl}</div>
+      <div style="font-size:13px;font-weight:700">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
+    </button>`;
+  }).join('');
+
+  const hours = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
+  const timeGrid = hours.map(h => {
+    const label = h<12?`${h}:00 AM`:h===12?'12:00 PM':`${h-12}:00 PM`;
+    const isPast = window._slotDate && (() => { const t=new Date(`${window._slotDate}T${String(h).padStart(2,'0')}:00:00`); return t<=now; })();
+    const existing = window._slotDate && window._exSlots.find(s => {
+      const sd = new Date(s.key);
+      return s.key.startsWith(window._slotDate) || (sd.getFullYear()===new Date(window._slotDate).getFullYear() && sd.getMonth()===new Date(window._slotDate).getMonth() && sd.getDate()===new Date(window._slotDate).getDate() && sd.getHours()===h);
+    });
+    const disabled = !window._slotDate || isPast || !!existing;
+    const sel = window._slotHour === h;
+    let bg='var(--inp)',border='var(--border)',col='var(--text)';
+    if (existing?.booked){bg='#fef2f2';border='#fecaca';col='#ef4444';}
+    else if (existing){bg='#dcfce7';border='#bbf7d0';col='#16a34a';}
+    else if (isPast){col='var(--sub)';}
+    else if (sel){bg='var(--primary)';border='var(--primary)';col='#fff';}
+    const title = existing?.booked?'Already booked':existing?'Already added':isPast?'Past time':!window._slotDate?'Pick a date first':'';
+    return `<button ${disabled?'disabled':''} onclick="${!disabled?`_spHour(${h})`:''}" title="${title}"
+      style="padding:7px 4px;border-radius:8px;border:1.5px solid ${border};background:${bg};color:${col};font-size:12px;font-weight:600;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled&&!existing?.booked?.booked?'.55':'1'}">
+      ${label}${existing?.booked?' 🔴':existing?' ✓':''}
+    </button>`;
+  }).join('');
+
+  const selISO = window._slotDate && window._slotHour!==null
+    ? (() => { const d=new Date(`${window._slotDate}T${String(window._slotHour).padStart(2,'0')}:00:00`); return d.toISOString(); })()
+    : null;
+
+  const slotList = window._exSlots.length
+    ? window._exSlots.map(s => {
+        const dt = new Date(s.key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:${s.booked?'#fef2f2':'var(--indigo-light)'};border-radius:8px;margin-bottom:5px">
+          <i class="fas fa-clock" style="font-size:11px;color:var(--sub)"></i>
+          <span style="flex:1;font-size:13px">${dt}</span>
+          ${s.booked?'<span style="font-size:11px;color:#ef4444;font-weight:700">Booked</span>':`<button onclick="_spRemove('${s.key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px"><i class="fas fa-times"></i></button>`}
+        </div>`;
+      }).join('')
+    : '<p style="font-size:13px;color:var(--sub);text-align:center;padding:8px 0">No slots added yet</p>';
+
+  return `<h2 style="margin-bottom:4px"><i class="fas fa-calendar-plus" style="color:var(--primary);margin-right:8px"></i>Add Availability Slots</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Pick dates and times when you're free for sessions</p>
+    <div style="overflow-x:auto;display:flex;gap:6px;padding-bottom:8px;margin-bottom:14px">${dayChips}</div>
+    <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">${window._slotDate?'Pick a time':'↑ Pick a date first'}</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">${timeGrid}</div>
+    ${selISO?`<div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span style="font-size:13px;font-weight:600">📅 ${new Date(selISO).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+      <button class="btn btn-p btn-sm" onclick="_spAdd('${selISO}')"><i class="fas fa-plus"></i> Add</button>
+    </div>`:''}
+    <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">Your Slots (${window._exSlots.length})</p>
+    <div style="max-height:180px;overflow-y:auto;margin-bottom:14px">${slotList}</div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="_spSave()"><i class="fas fa-check"></i> Save Slots</button>`;
+}
+function _spDate(val) { window._slotDate=val; window._slotHour=null; _renderSlotModal(); }
+function _spHour(h) { window._slotHour=h; _renderSlotModal(); }
+function _spAdd(iso) {
+  if (window._exSlots.find(s=>s.key===iso)) { toast('Already added'); return; }
+  window._exSlots.push({ key: iso, booked: false });
+  window._slotHour = null; toast('Slot added!'); _renderSlotModal();
+}
+function _spRemove(key) { window._exSlots=window._exSlots.filter(s=>s.key!==key); _renderSlotModal(); }
+async function _spSave() {
+  const existing = await api('/api/experts/me');
+  await api('/api/experts/me', { method:'POST', body: JSON.stringify({
+    expertise: existing?.expertise||[], price_per_session: existing?.price_per_session||500,
+    meeting_link: existing?.meeting_link||'', bio: existing?.bio||'',
+    availability_slots: window._exSlots||[]
+  })});
+  apiInvalidate('/api/experts'); closeModal(); toast('Slots saved! 🗓️'); renderExperts();
 }
 
 // ── JOBS ──────────────────────────────────────────────────────────────────
