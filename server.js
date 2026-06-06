@@ -666,18 +666,24 @@ app.delete('/api/connections/:id', auth, (req, res) => {
 // ─── MESSAGES ────────────────────────────────────────────────────────────────
 
 app.get('/api/messages/threads', auth, (req, res) => {
+  const uid = req.user.id;
+  // MAX(id) per conversation pair guarantees the most recent message
   const threads = db.prepare(`
     SELECT
       u.id, u.name, u.avatar_url, u.headline,
       m.content as last_message, m.created_at,
-      SUM(CASE WHEN m2.is_read=0 AND m2.receiver_id=? THEN 1 ELSE 0 END) as unread_count
+      (SELECT COUNT(*) FROM messages x WHERE x.sender_id=u.id AND x.receiver_id=? AND x.is_read=0) as unread_count
     FROM messages m
-    JOIN users u ON (CASE WHEN m.sender_id=? THEN m.receiver_id ELSE m.sender_id END) = u.id
-    LEFT JOIN messages m2 ON m2.sender_id=u.id AND m2.receiver_id=?
-    WHERE m.sender_id=? OR m.receiver_id=?
-    GROUP BY u.id
+    JOIN users u ON u.id = IIF(m.sender_id=?, m.receiver_id, m.sender_id)
+    WHERE m.id IN (
+      SELECT MAX(id) FROM messages
+      WHERE sender_id=? OR receiver_id=?
+      GROUP BY IIF(sender_id < receiver_id,
+                   CAST(sender_id AS TEXT) || '_' || CAST(receiver_id AS TEXT),
+                   CAST(receiver_id AS TEXT) || '_' || CAST(sender_id AS TEXT))
+    )
     ORDER BY m.created_at DESC
-  `).all(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id);
+  `).all(uid, uid, uid, uid);
   res.json(threads);
 });
 
@@ -1073,19 +1079,27 @@ io.on('connection', socket => {
 
 server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`))
 // ── ANALYTICS ─────────────────────────────────────────────────────────────
+const _analyticsCache = new Map();
 app.get('/api/analytics/me', auth, (req, res) => {
   const uid = req.user.id;
+  const hit = _analyticsCache.get(uid);
+  if (hit && Date.now() - hit.ts < 60000) return res.json(hit.data);
   const views = db.prepare('SELECT COUNT(*) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime("now","-30 days")').get(uid);
-  const posts = db.prepare('SELECT id FROM posts WHERE author_id=?').all(uid);
-  const postIds = posts.map(p => p.id);
-  let impressions = 0;
-  if (postIds.length) {
-    const placeholders = postIds.map(() => '?').join(',');
-    const rxRows = db.prepare(`SELECT COUNT(*) as c FROM post_reactions WHERE post_id IN (${placeholders})`).get(...postIds);
-    const cmRows = db.prepare(`SELECT COUNT(*) as c FROM comments WHERE post_id IN (${placeholders})`).get(...postIds);
-    impressions = (rxRows?.c || 0) * 8 + (cmRows?.c || 0) * 12 + postIds.length * 5;
-  }
-  res.json({ profile_views: views?.c || 0, post_impressions: impressions });
+  // Single query: count reactions and comments for all user posts at once
+  const row = db.prepare(`
+    SELECT
+      COUNT(DISTINCT pr.id) as rx_count,
+      COUNT(DISTINCT c.id)  as cm_count,
+      COUNT(DISTINCT p.id)  as post_count
+    FROM posts p
+    LEFT JOIN post_reactions pr ON pr.post_id = p.id
+    LEFT JOIN comments c ON c.post_id = p.id
+    WHERE p.author_id = ?
+  `).get(uid);
+  const impressions = (row?.rx_count || 0) * 8 + (row?.cm_count || 0) * 12 + (row?.post_count || 0) * 5;
+  const data = { profile_views: views?.c || 0, post_impressions: impressions };
+  _analyticsCache.set(uid, { data, ts: Date.now() });
+  res.json(data);
 });
 
 // ── PROFILE VIEW TRACKING ─────────────────────────────────────────────────

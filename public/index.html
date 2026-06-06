@@ -589,8 +589,10 @@ function updBadge(id, n) {
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────
+const PAGE_TITLES = { home:'Home', network:'Network', messaging:'Messages', notifications:'Alerts', profile:'Profile', jobs:'Jobs', salary:'Salary Board', reviews:'Company Reviews', experts:'Mentors', saved:'Saved Posts' };
 function go(page, extra) {
   curPage = page;
+  document.title = (PAGE_TITLES[page] || 'Nexus') + ' — Nexus';
   const si = document.getElementById('gsrch'); if (si) si.value = '';
   // Top nav active
   document.querySelectorAll('.nb[id^=nb-]').forEach(b => b.classList.remove('active'));
