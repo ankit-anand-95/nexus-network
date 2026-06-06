@@ -341,6 +341,10 @@ app.get('/api/posts', auth, (req, res) => {
     ? [req.user.id, limit, offset]
     : [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset];
 
+  const sort = req.query.sort === 'new' ? 'new' : 'top';
+  const orderBy = sort === 'top'
+    ? '(SELECT COUNT(*) FROM post_reactions WHERE post_id=p.id) DESC, (SELECT COUNT(*) FROM comments WHERE post_id=p.id) DESC, p.created_at DESC'
+    : 'p.created_at DESC';
   const posts = db.prepare(`
     SELECT p.*,
       CASE WHEN p.is_anonymous = 1 THEN 'Anonymous' ELSE u.name END as author_name,
@@ -350,7 +354,7 @@ app.get('/api/posts', auth, (req, res) => {
     FROM posts p
     LEFT JOIN users u ON p.author_id = u.id
     ${feedFilter}
-    ORDER BY p.created_at DESC
+    ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `).all(...feedParams);
 
@@ -1033,4 +1037,115 @@ io.on('connection', socket => {
   });
 });
 
-server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`))
+// ── ANALYTICS ─────────────────────────────────────────────────────────────
+app.get('/api/analytics/me', auth, (req, res) => {
+  const uid = req.user.id;
+  const views = db.prepare('SELECT COUNT(*) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime("now","-30 days")').get(uid);
+  const posts = db.prepare('SELECT id FROM posts WHERE author_id=?').all(uid);
+  const postIds = posts.map(p => p.id);
+  let impressions = 0;
+  if (postIds.length) {
+    const placeholders = postIds.map(() => '?').join(',');
+    const rxRows = db.prepare(`SELECT COUNT(*) as c FROM post_reactions WHERE post_id IN (${placeholders})`).get(...postIds);
+    const cmRows = db.prepare(`SELECT COUNT(*) as c FROM comments WHERE post_id IN (${placeholders})`).get(...postIds);
+    impressions = (rxRows?.c || 0) * 8 + (cmRows?.c || 0) * 12 + postIds.length * 5;
+  }
+  res.json({ profile_views: views?.c || 0, post_impressions: impressions });
+});
+
+// ── PROFILE VIEW TRACKING ─────────────────────────────────────────────────
+app.post('/api/users/:id/view', auth, (req, res) => {
+  const profileId = parseInt(req.params.id);
+  if (profileId === req.user.id) return res.json({ ok: true });
+  try {
+    db.prepare('INSERT INTO profile_views (profile_id, viewer_id) VALUES (?, ?)').run(profileId, req.user.id);
+  } catch(e) {}
+  res.json({ ok: true });
+});
+
+// ── FOLLOWERS ─────────────────────────────────────────────────────────────
+app.get('/api/users/:id/follow', auth, (req, res) => {
+  const row = db.prepare('SELECT id FROM follows WHERE follower_id=? AND following_id=?').get(req.user.id, req.params.id);
+  res.json({ following: !!row });
+});
+app.post('/api/users/:id/follow', auth, (req, res) => {
+  const targetId = parseInt(req.params.id);
+  if (targetId === req.user.id) return res.status(400).json({ error: 'Cannot follow yourself' });
+  const existing = db.prepare('SELECT id FROM follows WHERE follower_id=? AND following_id=?').get(req.user.id, targetId);
+  if (existing) {
+    db.prepare('DELETE FROM follows WHERE follower_id=? AND following_id=?').run(req.user.id, targetId);
+    res.json({ following: false });
+  } else {
+    db.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?,?)').run(req.user.id, targetId);
+    const actor = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
+    if (actor) createNotif(targetId, req.user.id, 'follow', 0, `${actor.name} started following you`);
+    res.json({ following: true });
+  }
+});
+app.get('/api/users/:id/followers', auth, (req, res) => {
+  const rows = db.prepare('SELECT u.id, u.name, u.headline, u.avatar_url FROM follows f JOIN users u ON f.follower_id=u.id WHERE f.following_id=? LIMIT 50').all(req.params.id);
+  res.json(rows);
+});
+app.get('/api/users/:id/following', auth, (req, res) => {
+  const rows = db.prepare('SELECT u.id, u.name, u.headline, u.avatar_url FROM follows f JOIN users u ON f.following_id=u.id WHERE f.follower_id=? LIMIT 50').all(req.params.id);
+  res.json(rows);
+});
+
+// ── SAVED POSTS ───────────────────────────────────────────────────────────
+app.post('/api/posts/:id/save', auth, (req, res) => {
+  const postId = parseInt(req.params.id);
+  const existing = db.prepare('SELECT id FROM saved_posts WHERE user_id=? AND post_id=?').get(req.user.id, postId);
+  if (existing) {
+    db.prepare('DELETE FROM saved_posts WHERE user_id=? AND post_id=?').run(req.user.id, postId);
+    res.json({ saved: false });
+  } else {
+    db.prepare('INSERT OR IGNORE INTO saved_posts (user_id, post_id) VALUES (?,?)').run(req.user.id, postId);
+    res.json({ saved: true });
+  }
+});
+app.get('/api/posts/saved', auth, (req, res) => {
+  const uid = req.user.id;
+  const rows = db.prepare(`
+    SELECT p.*, u.name as author_name, u.avatar_url as author_avatar, u.headline as author_headline,
+      CASE WHEN p.is_anonymous=1 AND p.author_id!=? THEN NULL ELSE p.author_id END as author_id,
+      (p.author_id=? OR p.is_anonymous=0) as show_author,
+      (p.author_id=?) as is_mine,
+      (SELECT COUNT(*) FROM likes WHERE post_id=p.id) as likes_count,
+      (SELECT COUNT(*) FROM comments WHERE post_id=p.id) as comments_count,
+      1 as is_saved
+    FROM saved_posts sp JOIN posts p ON sp.post_id=p.id LEFT JOIN users u ON p.author_id=u.id
+    WHERE sp.user_id=? AND p.is_published=1
+    ORDER BY sp.created_at DESC LIMIT 50
+  `).all(uid, uid, uid, uid);
+  res.json(rows.map(p => ({ ...p, reactions: [], my_reaction: null, is_saved: true })));
+});
+
+// ── TRENDING TOPICS ───────────────────────────────────────────────────────
+app.get('/api/trending', auth, (req, res) => {
+  // Top posts by reactions in last 7 days
+  const topPosts = db.prepare(`
+    SELECT p.id, p.content, u.name as author_name, u.avatar_url as author_avatar,
+      COUNT(pr.id) as reaction_count, COUNT(DISTINCT c.id) as comment_count
+    FROM posts p
+    LEFT JOIN users u ON p.author_id=u.id
+    LEFT JOIN post_reactions pr ON pr.post_id=p.id
+    LEFT JOIN comments c ON c.post_id=p.id
+    WHERE p.is_published=1 AND p.is_anonymous=0
+      AND p.created_at > datetime('now','-7 days')
+    GROUP BY p.id
+    ORDER BY reaction_count DESC, comment_count DESC
+    LIMIT 5
+  `).all();
+  // Hashtags / topics from post content
+  const allPosts = db.prepare("SELECT content FROM posts WHERE is_published=1 AND created_at > datetime('now','-7 days')").all();
+  const tagCount = {};
+  allPosts.forEach(p => {
+    const tags = (p.content || '').match(/#[\w]+/g) || [];
+    tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; });
+  });
+  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
+  res.json({ top_posts: topPosts, trending_tags });
+});
+
+;

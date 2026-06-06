@@ -258,7 +258,35 @@ const extraTables = [
   FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
 )`
 ];
-extraTables.forEach(sql => db.exec(sql));
+
+const newTables = [
+  `CREATE TABLE IF NOT EXISTS saved_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    post_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, post_id),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS follows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    follower_id INTEGER NOT NULL,
+    following_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(follower_id, following_id),
+    FOREIGN KEY(follower_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(following_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS profile_views (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    viewer_id INTEGER,
+    viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(profile_id) REFERENCES users(id) ON DELETE CASCADE
+  )`
+];
+[...extraTables, ...newTables].forEach(sql => db.exec(sql));
 
 const migrations = [
   `ALTER TABLE expert_profiles ADD COLUMN meeting_link TEXT DEFAULT ''`,

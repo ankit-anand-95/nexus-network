@@ -75,7 +75,8 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* FEED */
-.two-col{display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start}
+.two-col{display:grid;grid-template-columns:280px 1fr 300px;gap:20px;align-items:start}
+.two-col.no-right{grid-template-columns:280px 1fr}
 @media(max-width:860px){.two-col{grid-template-columns:1fr}}
 .sb-banner{height:64px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:var(--r) var(--r) 0 0;position:relative}
 .sb-avwrap{position:absolute;bottom:-28px;left:20px}
@@ -106,6 +107,11 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .post-acts{display:flex;align-items:center;gap:2px;padding:6px 8px;border-top:1px solid var(--border)}
 .pact{display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--r-sm);background:none;border:none;cursor:pointer;font-size:13px;color:var(--sub);font-weight:600;transition:.15s}
 .pact:hover{background:var(--indigo-light);color:var(--primary)}
+.sort-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.see-more{color:var(--primary);font-weight:600;font-size:13px;text-decoration:none}
+.see-more:hover{text-decoration:underline}
+.pact.saved{color:var(--primary)}
+.pact.save-btn{color:var(--sub)}
 .emoji-trig{background:none;border:none;cursor:pointer;color:var(--sub);font-size:18px;padding:6px 10px;border-radius:8px;transition:.12s;flex-shrink:0;display:flex;align-items:center}
 .emoji-trig:hover{background:var(--indigo-light);color:var(--primary)}
 .pact.liked{color:var(--primary)}
@@ -169,8 +175,8 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 #ctop{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
 #ctop h3{font-size:15px;font-weight:700;margin:0}
 #ctop p{font-size:12px;color:var(--sub);margin:0}
-#cmsgs{flex:1;min-height:0;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
-.bub{max-width:65%;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
+#cmsgs{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:16px 20px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
+.bub{max-width:65%;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word;overflow-wrap:break-word;box-sizing:border-box}
 .bub .bub-foot{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:3px}
 .bub time{font-size:10px;opacity:.6}
 .bub.mine{background:var(--primary);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
@@ -202,6 +208,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(0.
 body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(0.8) brightness(1.5)}
 /* Editable bubble */
 .bub.mine:hover .edit-msg-btn{opacity:1}
+.edit-msg-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:11px;padding:2px 4px;opacity:0;transition:.15s}
 .edit-msg-btn{opacity:0;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:11px;padding:2px 4px;transition:opacity .15s;margin-left:4px}
 .edit-msg-btn:hover{color:#fff}
 
@@ -250,6 +257,23 @@ body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter
 /* SEARCH HIGHLIGHT */
 mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;padding:0 2px}
 
+/* ── RIGHT SIDEBAR ──────────────────────────────────────── */
+#rs{position:sticky;top:76px}
+.rs-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px;overflow:hidden}
+.rs-card .rs-hdr{padding:14px 16px 10px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.rs-card .rs-hdr span{font-size:11px;font-weight:400;color:var(--sub)}
+.rs-item{padding:10px 16px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s}
+.rs-item:last-child{border-bottom:none}
+.rs-item:hover{background:var(--indigo-light)}
+.rs-item-body p{font-size:13px;font-weight:600;margin:0 0 2px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rs-item-body span{font-size:11px;color:var(--sub)}
+.tag-chip{display:inline-block;padding:4px 10px;border-radius:20px;background:var(--indigo-light);color:var(--primary);font-size:12px;font-weight:600;margin:3px 4px 3px 0;cursor:pointer;transition:.12s}
+.tag-chip:hover{background:var(--primary);color:#fff}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border-bottom:none}
+.stat-row:hover{background:var(--indigo-light);cursor:pointer}
+.stat-row .stat-label{font-size:13px;color:var(--sub)}
+.stat-row .stat-val{font-size:14px;font-weight:700;color:var(--primary)}
 /* ── BOTTOM NAV (mobile) ─────────────────────────────────── */
 #bnav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--card);border-top:1px solid var(--border);z-index:100;justify-content:space-around;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
 #bnav button{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;cursor:pointer;color:var(--sub);font-size:10px;font-weight:600;padding:5px 10px;border-radius:10px;position:relative;min-width:50px;transition:.12s}
@@ -275,68 +299,75 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 
 /* ── MOBILE (≤640px) ─────────────────────────────────────── */
 @media(max-width:640px){
-  /* Nav */
+  /* ── GLOBAL ── */
+  html,body{overflow-x:hidden;max-width:100vw}
+  /* ── NAV ── */
   nav{padding:0 12px;height:56px}
   .logo-txt{display:none}
   .logo-icon{width:32px;height:32px;font-size:15px}
   .nav-srch{flex:1;min-width:0;margin:0 8px}
   .nav-srch input{font-size:13px;padding:8px 10px 8px 32px}
   .nav-links{display:none}
-  /* Show bottom nav */
+  /* ── BOTTOM NAV ── */
   #bnav{display:flex}
-  /* Global content offset for bottom nav */
+  /* ── CONTENT OFFSET ── */
   #pr{padding:64px 10px 76px}
-  /* Messaging full-screen toggle */
-  #mlay{grid-template-columns:1fr;height:calc(100vh - 112px)}
-  .mlist{height:100%;display:flex;flex-direction:column}
-  #ccol{position:fixed;inset:56px 0 0 0;background:var(--card);z-index:50;display:none;flex-direction:column}
+  /* ── MESSAGING LAYOUT ── */
+  #mlay{grid-template-columns:1fr;height:calc(100dvh - 112px)}
+  .mlist{height:100%;display:flex;flex-direction:column;overflow-y:auto}
+  /* Chat panel: fixed, sits between top nav and bottom nav */
+  #ccol{position:fixed;top:56px;left:0;right:0;bottom:56px;background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
   #mlay.chat-open #ccol{display:flex}
   #mlay.chat-open .mlist{display:none}
-  /* Hide bottom nav when chat is open (full screen) */
-  body.in-chat #bnav{display:none}
-  body.in-chat #mlay{height:calc(100vh - 56px)}
-  /* Modals → bottom sheet */
+  /* Keep bottom nav visible in chat for navigation */
+  body.in-chat #bnav{display:flex}
+  /* ── CHAT INTERNALS ── */
+  #ctop{padding:10px 14px;flex-shrink:0;border-bottom:1px solid var(--border)}
+  #ctop h3{font-size:14px}
+  #cmsgs{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px 12px;box-sizing:border-box;width:100%}
+  .bub{max-width:78%;word-break:break-word;overflow-wrap:break-word;box-sizing:border-box}
+  #cinp{padding:8px 10px;gap:6px;flex-shrink:0;border-top:1px solid var(--border);background:var(--card)}
+  #cinp input{font-size:13px;padding:9px 12px}
+  /* ── BACK BUTTON ── */
+  .back-to-threads{display:flex;align-items:center;gap:6px;background:var(--indigo-light);color:var(--primary);border:none;cursor:pointer;padding:7px 12px;border-radius:20px;font-size:13px;font-weight:700;flex-shrink:0}
+  /* ── MODALS → BOTTOM SHEET ── */
   .modal-bg{align-items:flex-end;padding:0}
-  .modal{border-radius:20px 20px 0 0;max-height:90vh;width:100%;max-width:100%;box-sizing:border-box;padding:22px 20px}
-  /* Layout */
+  .modal{border-radius:20px 20px 0 0;max-height:90dvh;width:100%;max-width:100%;box-sizing:border-box;padding:22px 20px;overflow-y:auto}
+  /* ── LAYOUT ── */
   .two-col{grid-template-columns:1fr;gap:0}
   #sl{display:none}
   .card{border-radius:10px}
   .sug-grid{grid-template-columns:repeat(2,1fr);gap:10px}
-  /* Feed */
+  /* ── FEED ── */
   .post-hdr{padding:12px 14px 0}
   .post-body{padding:10px 14px;font-size:13px}
   .post-acts{padding:4px 6px;gap:0}
   .pact{padding:7px 10px;font-size:12px;gap:4px}
   .react-counts{padding:2px 14px 4px}
-  /* Composer */
+  /* ── COMPOSER ── */
   .comp-wrap{padding:12px 14px 6px}
   .comp-ta{min-height:72px;font-size:13px}
   .comp-acts{padding:6px 14px 10px;gap:4px;flex-wrap:wrap}
   .cbtn{padding:5px 8px;font-size:11px;gap:4px}
-  /* Messaging */
+  /* ── THREADS LIST ── */
   .mhdr{padding:12px 16px;font-size:14px}
   .mthread{padding:12px 14px}
-  #ctop{padding:10px 14px}
-  #cmsgs{padding:12px 14px}
-  #cinp{padding:10px 12px;gap:6px}
-  #cinp input{font-size:13px;padding:9px 12px}
-  /* Profile */
+  /* ── PROFILE ── */
   .prof-body{padding:52px 16px 14px}
   .prof-body h1{font-size:18px}
   .prof-actions{gap:8px}
-  /* Forms */
+  /* ── FORMS ── */
   .frow{grid-template-columns:1fr}
   .frow2{flex-direction:column}
-  /* Page headers */
+  /* ── PAGE HEADERS ── */
   .phdr h1{font-size:18px}
   .phdr{margin-bottom:12px}
-  /* Jobs */
+  /* ── JOBS ── */
   .ji{padding:14px}
   .jmeta{gap:8px}
-  /* Experts */
+  /* ── EXPERTS ── */
   .sug-grid .card{padding:14px}
-  /* Notifications */
+  /* ── NOTIFICATIONS ── */
   .prow{padding:12px 14px}
 }
 /* Very small phones */
@@ -505,7 +536,7 @@ function go(page, extra) {
   // Clear mobile chat state
   document.body.classList.remove('in-chat');
   const _pr = document.getElementById('pr'); _pr.removeAttribute('style'); _pr.innerHTML = '<div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div>';
-  ({ home: renderHome, profile: renderProfile, network: renderNetwork, messaging: renderMessaging, notifications: renderNotifs, salary: renderSalary, reviews: renderReviews, experts: renderExperts, jobs: renderJobs }[page] || renderHome)(extra);
+  ({ home: renderHome, profile: renderProfile, network: renderNetwork, messaging: renderMessaging, notifications: renderNotifs, salary: renderSalary, reviews: renderReviews, experts: renderExperts, jobs: renderJobs, saved: renderSaved }[page] || renderHome)(extra);
 }
 function toggleDark() {
   document.body.classList.toggle('dark');
@@ -902,8 +933,9 @@ let _feedPage = 1, _feedLoading = false, _feedDone = false;
 
 async function renderHome() {
   _feedPage = 1; _feedLoading = false; _feedDone = false;
-  document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="feed"></div><div id="feed-sentinel" style="height:40px;display:flex;align-items:center;justify-content:center"></div></div></div>`;
-  await renderSB(); renderComposer();
+  document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="fsort" style="display:flex;align-items:center;gap:8px;padding:8px 0 4px"><span style="font-size:13px;color:var(--sub);font-weight:600">Sort by:</span><button class="btn btn-o btn-sm sort-btn active" id="sort-top" onclick="setFeedSort('top')"><i class="fas fa-fire-flame-curved"></i> Top</button><button class="btn btn-o btn-sm sort-btn" id="sort-new" onclick="setFeedSort('new')"><i class="fas fa-clock"></i> Recent</button></div><div id="feed"></div><div id="feed-sentinel" style="height:40px;display:flex;align-items:center;justify-content:center"></div></div><div id="rs"></div></div>`;
+  await Promise.all([renderSB(), renderRightSidebar()]);
+  renderComposer();
   await loadMorePosts();
   // Infinite scroll observer
   const sentinel = document.getElementById('feed-sentinel');
@@ -944,7 +976,7 @@ async function loadMorePosts() {
   _feedLoading = true;
   const sentinel = document.getElementById('feed-sentinel');
   if (sentinel) sentinel.innerHTML = `<span style="color:var(--sub);font-size:13px"><i class="fas fa-spinner fa-spin"></i> Loading…</span>`;
-  const posts = await api('/api/posts?page=' + _feedPage);
+  const posts = await api('/api/posts?page=' + _feedPage + '&sort=' + (_feedSort||'top'));
   _feedLoading = false;
   if (!Array.isArray(posts) || posts.length === 0) {
     _feedDone = true;
@@ -967,6 +999,89 @@ async function loadMorePosts() {
   if (sentinel) sentinel.innerHTML = '';
   if (posts.length < 20) { _feedDone = true; if (sentinel && _feedPage > 2) sentinel.innerHTML = `<p style="color:var(--sub);font-size:13px;padding:16px">You're all caught up ✓</p>`; }
 }
+let _feedSort = 'top';
+function setFeedSort(s) {
+  _feedSort = s;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sort-' + s)?.classList.add('active');
+  _feedPage = 1; _feedDone = false; _feedLastTs = null;
+  const feed = document.getElementById('feed'); if(feed) feed.innerHTML = '';
+  loadMorePosts();
+}
+
+async function renderRightSidebar() {
+  const rsEl = document.getElementById('rs'); if (!rsEl) return;
+  rsEl.innerHTML = '<div class="rs-card"><div class="rs-hdr">Loading…</div></div>';
+  const [trending, analytics] = await Promise.all([
+    api('/api/trending').catch(() => ({ top_posts:[], trending_tags:[] })),
+    api('/api/analytics/me').catch(() => ({ profile_views:0, post_impressions:0 }))
+  ]);
+
+  let html = '';
+
+  // Analytics mini card
+  html += `<div class="rs-card">
+    <div class="rs-hdr">Your Activity <span>Last 30 days</span></div>
+    <div class="stat-row" onclick="go('profile')">
+      <span class="stat-label"><i class="fas fa-eye" style="width:16px;color:var(--primary)"></i> Profile viewers</span>
+      <span class="stat-val">${analytics.profile_views}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label"><i class="fas fa-chart-line" style="width:16px;color:var(--primary)"></i> Post impressions</span>
+      <span class="stat-val">${analytics.post_impressions}</span>
+    </div>
+    <div style="padding:10px 16px">
+      <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-chart-bar"></i> View full analytics</button>
+    </div>
+  </div>`;
+
+  // Trending topics / hashtags
+  if (trending.trending_tags?.length) {
+    html += `<div class="rs-card">
+      <div class="rs-hdr">Trending on Nexus <span></span></div>
+      <div style="padding:12px 16px">${trending.trending_tags.map(t => `<span class="tag-chip" onclick="searchHashtag('${t.tag}')">${t.tag} <span style="font-weight:400;font-size:10px">${t.count}</span></span>`).join('')}</div>
+    </div>`;
+  }
+
+  // Top posts of the week
+  if (trending.top_posts?.length) {
+    html += `<div class="rs-card">
+      <div class="rs-hdr">Top This Week <span></span></div>
+      ${trending.top_posts.map(p => `<div class="rs-item" onclick="document.getElementById('pc-${p.id}')?.scrollIntoView({behavior:'smooth'})">
+        ${av({ name: p.author_name, avatar_url: p.author_avatar }, 'av40')}
+        <div class="rs-item-body">
+          <p>${escHtml((p.content||'').slice(0,80))}…</p>
+          <span><i class="fas fa-fire-flame-curved" style="color:#f59e0b"></i> ${p.reaction_count} reactions</span>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // People to follow
+  const sug = await api('/api/connections/suggestions').catch(() => []);
+  if (Array.isArray(sug) && sug.length) {
+    html += `<div class="rs-card">
+      <div class="rs-hdr">People You May Know <span></span></div>
+      ${sug.slice(0,3).map(s => `<div class="rs-item" style="align-items:center">
+        ${av(s, 'av40')}
+        <div class="rs-item-body" style="flex:1">
+          <p>${escHtml(s.name)}</p>
+          <span>${escHtml(s.headline||'')}</span>
+        </div>
+        <button class="btn btn-o btn-sm" onclick="sendConn(${s.id},this)" style="flex-shrink:0"><i class="fas fa-user-plus"></i></button>
+      </div>`).join('')}
+      <div style="padding:10px 16px"><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('network')">See all</button></div>
+    </div>`;
+  }
+
+  rsEl.innerHTML = html || '<div class="rs-card"><div style="padding:16px;color:var(--sub);font-size:13px">No trending content yet — start posting!</div></div>';
+}
+
+function searchHashtag(tag) {
+  const srch = document.getElementById('gsrch');
+  if (srch) { srch.value = tag; doSearch(tag); }
+}
+
 async function renderSB() {
   const el = document.getElementById('sl'); if (!el || !me) return;
   // Fetch fresh me data for sidebar (includes skills, location etc)
@@ -980,7 +1095,11 @@ async function renderSB() {
       ${me.location ? `<p style="font-size:12px;color:var(--sub);margin:0"><i class="fas fa-location-dot" style="width:14px"></i> ${me.location}</p>` : ''}
       ${me.current_position ? `<p style="font-size:12px;color:var(--sub);margin:4px 0 0"><i class="fas fa-briefcase" style="width:14px"></i> ${me.current_position}</p>` : ''}
     </div>
-    <div class="sb-stat"><span><i class="fas fa-users" style="color:var(--primary)"></i> Connections</span><span style="color:var(--primary);font-weight:700">${me.connections_count || 0}</span></div>
+    <div class="sb-stat" style="cursor:pointer" onclick="go('profile')"><span><i class="fas fa-users" style="color:var(--primary)"></i> Connections</span><span style="color:var(--primary);font-weight:700">${me.connections_count || 0}</span></div>
+    <div id="sb-analytics" style="border-top:1px solid var(--border)">
+      <div class="sb-stat" style="cursor:pointer" onclick="renderRightSidebar()"><span style="font-size:12px"><i class="fas fa-eye" style="color:var(--primary)"></i> Profile viewers</span><span class="sb-aval" id="sb-views" style="color:var(--primary);font-weight:700">–</span></div>
+      <div class="sb-stat"><span style="font-size:12px"><i class="fas fa-chart-line" style="color:var(--primary)"></i> Post impressions</span><span id="sb-impr" style="color:var(--primary);font-weight:700">–</span></div>
+    </div>
     ${me.skills?.length ? `<div style="padding:10px 16px;border-top:1px solid var(--border)"><p style="font-size:11px;font-weight:700;color:var(--sub);margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px">Skills</p><div style="display:flex;flex-wrap:wrap;gap:4px">${me.skills.slice(0,5).map(s=>`<span class="chip" style="font-size:10px;padding:2px 8px">${s}</span>`).join('')}${me.skills.length > 5 ? `<span style="font-size:11px;color:var(--sub);align-self:center">+${me.skills.length-5}</span>` : ''}</div></div>` : ''}
     <div style="padding:10px 16px;border-top:1px solid var(--border)">
       <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-user"></i> View Profile</button>
@@ -988,6 +1107,7 @@ async function renderSB() {
     <div style="padding:0 16px 12px;border-top:1px solid var(--border);margin-top:4px">
       <p style="font-size:11px;font-weight:700;color:var(--sub);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">Quick Links</p>
       <div style="display:flex;flex-direction:column;gap:4px">
+        <a href="#" onclick="go('saved')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-bookmark" style="width:18px;color:var(--primary)"></i> Saved Posts</a>
         <a href="#" onclick="go('salary')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-rupee-sign" style="width:18px;color:var(--primary)"></i> Salary Board</a>
         <a href="#" onclick="go('jobs')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-briefcase" style="width:18px;color:var(--primary)"></i> Browse Jobs</a>
         <a href="#" onclick="go('experts')" style="font-size:13px;color:var(--text);text-decoration:none;padding:4px 0"><i class="fas fa-graduation-cap" style="width:18px;color:var(--primary)"></i> Find Mentors</a>
@@ -995,6 +1115,11 @@ async function renderSB() {
       </div>
     </div>
   </div>`;
+  // Load analytics async
+  api('/api/analytics/me').then(a => {
+    const v = document.getElementById('sb-views'); if(v) v.textContent = a.profile_views ?? '–';
+    const im = document.getElementById('sb-impr'); if(im) im.textContent = a.post_impressions ?? '–';
+  }).catch(()=>{});
 }
 let cmode = '';
 function renderComposer() {
@@ -1079,7 +1204,7 @@ function renderPost(p) {
       ${!mine ? `<button class="flag-btn" onclick="flagContent('post',${p.id})" title="Report"><i class="fas fa-flag"></i></button>` : ''}
       ${mine ? `<button onclick="editPost(${p.id},'${safeContent}')" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delPost(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
     </div></div>
-    <div class="post-body">${escHtml(p.content)}</div>
+    <div class="post-body" id="pb-${p.id}">${p.content && p.content.length > 220 ? `<span class="post-excerpt">${escHtml(p.content.slice(0,220))}<span class="post-ellipsis">… </span><a href="#" class="see-more" onclick="expandPost(${p.id});return false;">see more</a><span class="post-full" style="display:none">${escHtml(p.content.slice(220))}<a href="#" class="see-more" onclick="collapsePost(${p.id});return false;" style="margin-left:4px">see less</a></span></span>` : escHtml(p.content || '')}</div>
     ${p.image_url ? `<img src="${p.image_url}" class="post-img" loading="lazy">` : ''}
     ${pollHtml}
     ${reactCountsHtml}
@@ -1089,6 +1214,7 @@ function renderPost(p) {
       </div>
       <button class="pact" onclick="toggleComs(${p.id})"><i class="far fa-comment"></i> ${p.comments_count || 0}</button>
       <button class="pact" onclick="sharePost(${p.id})"><i class="fas fa-share-nodes"></i> Share</button>
+      <button class="pact save-btn${p.is_saved?' saved':''}" onclick="savePost(${p.id},this)" style="margin-left:auto" title="${p.is_saved?'Unsave':'Save'}"><i class="${p.is_saved?'fas':'far'} fa-bookmark"></i></button>
     </div>
     <div id="coms-${p.id}" style="display:none"></div>
   </div>`;
@@ -1268,13 +1394,17 @@ function insertEmoji(targetId, emoji) {
 async function renderProfile(uid) {
   const isMe = !uid || uid == me?.id;
   const d = await api(isMe ? '/api/users/me' : '/api/users/' + uid);
+  if (!isMe && uid) api('/api/users/' + uid + '/view', { method: 'POST' }).catch(() => {});
   if (d.error) { document.getElementById('pr').innerHTML = '<div class="card empty"><i class="fas fa-user-slash"></i><p>User not found</p></div>'; return; }
   const cs = d.connectionStatus;
+  let followData = { following: false };
+  if (!isMe && d.id) { try { followData = await api('/api/users/' + d.id + '/follow'); } catch(e){} }
+  const followBtn = isMe ? '' : `<button class="btn btn-o follow-btn${followData.following ? ' following' : ''}" id="fol-${d.id}" onclick="toggleFollow(${d.id})"><i class="fas fa-${followData.following ? 'user-check' : 'user-plus'}"></i> ${followData.following ? 'Following' : 'Follow'}</button>`;
   const connBtn = isMe ? '' : cs === 'accepted'
-    ? `<button class="btn btn-o" onclick="go('messaging',${d.id})"><i class="fas fa-comment"></i> Message</button><button class="btn btn-g btn-sm" onclick="removeConn(${d.id})">Connected ✓</button>`
+    ? `<button class="btn btn-o" onclick="go('messaging',${d.id})"><i class="fas fa-comment"></i> Message</button><button class="btn btn-g btn-sm" onclick="removeConn(${d.id})">Connected ✓</button>${followBtn}`
     : cs === 'pending'
-    ? '<button class="btn btn-g" disabled>Pending</button>'
-    : `<button class="btn btn-p" onclick="sendConn(${d.id},this)"><i class="fas fa-user-plus"></i> Connect</button>`;
+    ? `<button class="btn btn-g" disabled>Pending</button>${followBtn}`
+    : `<button class="btn btn-p" onclick="sendConn(${d.id},this)"><i class="fas fa-user-plus"></i> Connect</button>${followBtn}`;
   document.getElementById('pr').innerHTML = `<div style="max-width:760px;margin:0 auto">
     <div class="card" style="overflow:hidden">
       <div class="prof-banner" style="${d.banner_url ? '' : 'background:linear-gradient(135deg,var(--primary),var(--secondary))'}">${d.banner_url ? `<img src="${d.banner_url}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:rgba(0,0,0,.15)"></div>` : ''}${isMe ? `<label style="position:absolute;bottom:10px;right:14px;cursor:pointer;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);padding:6px 12px;border-radius:8px;color:#fff;font-size:12px;font-weight:700"><i class="fas fa-camera"></i> Banner<input type="file" accept="image/*" style="display:none" onchange="uploadFile(this,'banner')"></label>` : ''}</div>
@@ -1364,6 +1494,37 @@ async function renderNetwork() {
     ${Array.isArray(co) && co.length ? `<div class="card"><div class="ch">Your Connections <span class="chip chip-p">${co.length}</span></div>${co.map(c => `<div class="prow">${av(c, 'av48')}<div class="pinfo"><h4><a href="#" onclick="go('profile',${c.id})" style="color:var(--text);text-decoration:none">${c.name}</a></h4><p>${c.headline || c.current_position || ''}</p></div><div style="display:flex;gap:6px"><button class="btn btn-o btn-sm" onclick="go('profile',${c.id})">Profile</button><button class="btn btn-p btn-sm" onclick="go('messaging',${c.id})"><i class="fas fa-comment"></i> Message</button></div></div>`).join('')}</div>` : `<div class="card"><div class="ch">Your Connections</div><div class="empty" style="padding:40px"><i class="fas fa-user-plus" style="font-size:40px"></i><p>No connections yet</p><p style="font-size:13px;margin-top:6px">Search for people above or explore suggestions</p></div></div>`}
   </div>`;
 }
+function expandPost(id) {
+  const pb = document.getElementById('pb-' + id); if (!pb) return;
+  pb.querySelector('.post-excerpt .post-ellipsis')?.remove();
+  const sm = pb.querySelector('.post-excerpt .see-more'); if(sm) sm.remove();
+  const full = pb.querySelector('.post-full'); if(full) full.style.display = 'inline';
+}
+function collapsePost(id) {
+  const pb = document.getElementById('pb-' + id); if (!pb) return;
+  const full = pb.querySelector('.post-full'); if(full) full.style.display = 'none';
+  const excerpt = pb.querySelector('.post-excerpt'); if (!excerpt) return;
+  // Re-add ellipsis and see-more
+  if (!excerpt.querySelector('.post-ellipsis')) {
+    const ell = document.createElement('span'); ell.className = 'post-ellipsis'; ell.textContent = '… ';
+    const sm = document.createElement('a'); sm.href='#'; sm.className='see-more'; sm.textContent='see more';
+    sm.onclick = e => { e.preventDefault(); expandPost(id); };
+    excerpt.appendChild(ell); excerpt.appendChild(sm);
+  }
+}
+
+async function savePost(id, btn) {
+  const r = await api('/api/posts/' + id + '/save', { method: 'POST' });
+  if (r.error) { toast(r.error); return; }
+  if (btn) {
+    btn.classList.toggle('saved', r.saved);
+    btn.title = r.saved ? 'Unsave' : 'Save';
+    const icon = btn.querySelector('i');
+    if (icon) { icon.className = r.saved ? 'fas fa-bookmark' : 'far fa-bookmark'; }
+  }
+  toast(r.saved ? 'Post saved! 🔖' : 'Removed from saved');
+}
+
 async function sendConn(id, btn) {
   const r = await api('/api/connections/' + id, { method: 'POST' });
   if (r.error) { toast(r.error); return; }
@@ -1391,7 +1552,7 @@ async function renderMessaging(pre) {
   updBadge('mbadge', 0);
   const pr = document.getElementById('pr');
   pr.style.cssText = 'padding:60px 0 0;max-width:100%;box-sizing:border-box';
-  pr.innerHTML = `<div id="mlay"><div class="mlist"><div class="mhdr">Messages <button class="btn btn-p btn-sm" style="margin-left:auto;padding:4px 10px" onclick="showNewMsg()" title="New message"><i class="fas fa-edit"></i></button></div><div id="ml"><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div></div><div id="ccol"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--sub);text-align:center;padding:20px"><i class="fas fa-comment-dots" style="font-size:56px;opacity:.2;margin-bottom:16px"></i><p style="font-size:16px;font-weight:700;margin-bottom:8px">Your Messages</p><p style="font-size:13px">Select a conversation or click ✏️ to start one</p></div></div></div>`;
+  pr.innerHTML = `<div id="mlay"><div class="mlist"><div class="mhdr">Messages <button class="btn btn-p btn-sm" style="margin-left:auto;padding:4px 10px" onclick="showNewMsg()" title="New message"><i class="fas fa-edit"></i></button></div><div style="padding:8px 12px;border-bottom:1px solid var(--border)"><div style="position:relative"><i class="fas fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:13px"></i><input id="msg-srch" type="search" placeholder="Search messages…" style="width:100%;padding:8px 10px 8px 32px;border:1.5px solid var(--border);border-radius:20px;background:var(--inp);color:var(--text);font-size:13px;box-sizing:border-box" oninput="filterThreads(this.value)"></div></div><div id="ml"><div class="ld"><i class="fas fa-circle-notch spin"></i></div></div></div><div id="ccol"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--sub);text-align:center;padding:20px"><i class="fas fa-comment-dots" style="font-size:56px;opacity:.2;margin-bottom:16px"></i><p style="font-size:16px;font-weight:700;margin-bottom:8px">Your Messages</p><p style="font-size:13px">Select a conversation or click ✏️ to start one</p></div></div></div>`;
   const th = await api('/api/messages/threads'); const ml = document.getElementById('ml'); if (!ml) return;
   if (!Array.isArray(th) || !th.length) {
     ml.innerHTML = `<div style="padding:28px 20px;text-align:center;color:var(--sub)"><i class="fas fa-comment-slash" style="font-size:32px;opacity:.2;margin-bottom:10px"></i><p style="font-size:13px;font-weight:600">No conversations yet</p><p style="font-size:12px;margin-top:6px">Connect with people, then message them</p></div>`;
@@ -1405,6 +1566,15 @@ async function showNewMsg() {
   if (!Array.isArray(conns) || !conns.length) { toast('Connect with people first!'); return; }
   showModal(`<h2 style="margin-bottom:16px">New Message</h2><input id="msrch" placeholder="Search connections…" oninput="filterMsgConns()" style="width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:12px"><div id="mconns" style="max-height:340px;overflow-y:auto">${conns.map(c => `<div class="prow mconn-row" style="cursor:pointer;border-radius:var(--r-sm)" onclick="closeModal();setTimeout(()=>go('messaging',${c.id}),100)">${av(c, 'av40')}<div class="pinfo"><h4>${c.name}</h4><p>${c.headline || c.current_position || ''}</p></div></div>`).join('')}</div>`);
 }
+function filterThreads(q) {
+  const query = q.toLowerCase();
+  document.querySelectorAll('#ml .mthread').forEach(el => {
+    const name = el.querySelector('h5')?.textContent.toLowerCase() || '';
+    const msg = el.querySelector('p')?.textContent.toLowerCase() || '';
+    el.style.display = (!query || name.includes(query) || msg.includes(query)) ? '' : 'none';
+  });
+}
+
 function filterMsgConns() { const q = document.getElementById('msrch')?.value.toLowerCase(); document.querySelectorAll('.mconn-row').forEach(r => { r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
 async function openChat(uid, name) {
   achat = uid;
@@ -1426,7 +1596,7 @@ async function openChat(uid, name) {
   const hl = info.headline || '';
   col.innerHTML = `
     <div id="ctop">
-      <button class="back-to-threads" onclick="closeMobileChat()" title="Back"><i class="fas fa-arrow-left"></i></button>
+      <button class="back-to-threads" onclick="closeMobileChat()"><i class="fas fa-arrow-left"></i> Back</button>
       <div class="pres-wrap${isOnline?' online':''}" id="ctop-pres">${av(info,'av40')}<div class="pres-dot"></div></div>
       <div><h3>${escHtml(info.name||name)}</h3><p id="ctop-sub" data-hl="${escHtml(hl)}">${isOnline?'Active now':hl}</p></div>
       <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button>
@@ -1499,6 +1669,9 @@ function closeMobileChat() {
   if (mlay) mlay.classList.remove('chat-open');
   document.body.classList.remove('in-chat');
   achat = null;
+  // Re-highlight messaging in bottom nav
+  document.querySelectorAll('#bnav button').forEach(b => b.classList.remove('active'));
+  const bnb = document.getElementById('bnb-messaging'); if (bnb) bnb.classList.add('active');
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
@@ -1510,6 +1683,14 @@ function _fmtNotifContent(text) {
     return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} at ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} UTC`;
   });
 }
+async function renderSaved() {
+  const posts = await api('/api/posts/saved');
+  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto">
+    <div class="phdr"><h1>🔖 Saved Posts</h1></div>
+    ${Array.isArray(posts) && posts.length ? posts.map(renderPost).join('') : '<div class="card empty"><i class="fas fa-bookmark" style="font-size:40px"></i><p>No saved posts yet — bookmark posts to find them here</p></div>'}
+  </div>`;
+}
+
 async function renderNotifs() {
   const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
   document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${x.content}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
