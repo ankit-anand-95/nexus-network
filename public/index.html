@@ -2105,9 +2105,9 @@ async function renderExperts() {
   ]);
   const isMentor = Array.isArray(myMentorSessions) && myMentorSessions.length > 0;
 
-  // ── My Mentorship Dashboard (mentor view) ─────────────────────────────
+  // ── My Mentorship Dashboard (shown only when user has sessions) ────────
   let mentorDash = '';
-  if (isMentor || myMentorSessions !== null) {
+  if (isMentor) {
     const expSess = await api('/api/sessions?role=expert').catch(() => []);
     const ea = Array.isArray(expSess) ? expSess : [];
     const pendingCount = ea.filter(s => s.status === 'pending').length;
@@ -2232,14 +2232,21 @@ async function renderExperts() {
     ? `<h3 style="font-size:13px;font-weight:700;color:var(--sub);margin:16px 0 10px;text-transform:uppercase;letter-spacing:.5px">Fully Booked</h3><div class="sug-grid">${fullyBooked.map(e => _mentorCard(e, false)).join('')}</div>`
     : '';
 
-  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
-    <div class="phdr">
-      <h1>🎓 Mentors & Sessions</h1>
-      ${!isMentor ? '<button class="btn btn-p" onclick="showAddSession()"><i class="fas fa-plus"></i> Offer Mentoring</button>' : ''}
+  // "Become a mentor" prompt card shown only to non-mentors
+  const becomeCard = !isMentor ? `<div class="card" style="margin-bottom:20px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <p style="margin:0 0 4px;font-weight:700;font-size:15px">🎓 Share your expertise</p>
+      <p style="margin:0;font-size:13px;color:var(--sub)">Create a mentorship session and get discovered by learners</p>
     </div>
+    <button class="btn btn-p" onclick="showAddSession()"><i class="fas fa-plus"></i> Offer a Session</button>
+  </div>` : '';
+
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
+    <div class="phdr"><h1>🎓 Mentors & Sessions</h1></div>
     ${mentorDash}
+    ${becomeCard}
     ${learnerSessions}
-    ${(available.length || fullyBooked.length || !isMentor) ? `<h3 style="font-size:13px;font-weight:700;color:var(--sub);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Available Mentors</h3><div class="sug-grid">${availCards}</div>${bookedSection}` : ''}
+    ${(available.length || fullyBooked.length) ? `<h3 style="font-size:13px;font-weight:700;color:var(--sub);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Available Mentors</h3><div class="sug-grid">${availCards}</div>${bookedSection}` : ''}
   </div>`;
 }
 
@@ -2432,7 +2439,7 @@ async function saveSessionForm() {
     await api('/api/mentor-sessions', { method:'POST', body: JSON.stringify(body) });
     toast('Session created! 🎓');
   }
-  apiInvalidate('/api/mentor-sessions'); apiInvalidate('/api/experts');
+  apiInvalidate(''); // clear all cache to force fresh fetch
   closeModal(); renderExperts();
 }
 
