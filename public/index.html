@@ -646,7 +646,15 @@ function initSocket() {
   if (socket) { try { socket.removeAllListeners(); socket.disconnect(); } catch(e){} socket = null; }
   socket = io({ reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000, reconnectionDelayMax: 8000, timeout: 10000 });
 
-  socket.on('connect', () => { socket.emit('authenticate', token); });
+  socket.on('connect', () => {
+    socket.emit('authenticate', token);
+    // On reconnect re-fetch presence so indicators update immediately
+    if (achat) setTimeout(() => socket.emit('get_presence', { userId: achat }), 500);
+  });
+  socket.on('reconnect', () => {
+    socket.emit('authenticate', token);
+    if (achat) setTimeout(() => socket.emit('get_presence', { userId: achat }), 500);
+  });
   socket.emit('authenticate', token);
 
   // ── SINGLE persistent message handler ────────────────────────────────────
@@ -1701,18 +1709,47 @@ async function openChat(uid, name) {
     <div id="cinp"><button onclick="openEmojiPicker('cinput',this)" class="emoji-trig" title="Emoji"><i class="far fa-face-smile"></i></button><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
   if (socket) socket.emit('get_presence', { userId: uid });
-  // iOS keyboard: push #ccol up when keyboard opens so input stays visible
-  if (window.visualViewport && window.innerWidth <= 640) {
-    const onVpResize = () => {
-      const ccol = document.getElementById('ccol'); if (!ccol) return;
-      const keyboardH = window.innerHeight - window.visualViewport.height;
+  // Poll presence every 20s while chat is open (keeps indicator fresh)
+  clearInterval(window._presTimer);
+  window._presTimer = setInterval(() => { if (socket && achat) socket.emit('get_presence', { userId: achat }); }, 20000);
+  // Mobile keyboard: push #ccol above keyboard when input is focused
+  if (window.innerWidth <= 768) {
+    const _adjustChat = () => {
+      const ccol = document.getElementById('ccol'); if (!ccol || !achat) return;
       const bnav = document.getElementById('bnav');
-      const bnavH = bnav ? bnav.offsetHeight : 56;
-      ccol.style.bottom = (keyboardH > 50 ? keyboardH : bnavH) + 'px';
+      const vp = window.visualViewport;
+      let keyboardH = 0;
+      if (vp) keyboardH = Math.max(0, window.innerHeight - vp.height - (vp.offsetTop || 0));
+      if (keyboardH > 80) {
+        // Keyboard is open: shift ccol above keyboard, hide bnav
+        ccol.style.bottom = keyboardH + 'px';
+        ccol.style.transition = 'bottom .15s ease';
+        if (bnav) bnav.style.display = 'none';
+      } else {
+        // Keyboard closed: restore
+        ccol.style.bottom = '';
+        ccol.style.transition = '';
+        if (bnav) bnav.style.display = '';
+      }
+      const mb = document.getElementById('cmsgs');
+      if (mb) mb.scrollTop = mb.scrollHeight;
     };
-    window.visualViewport.removeEventListener('resize', window._vpHandler);
-    window._vpHandler = onVpResize;
-    window.visualViewport.addEventListener('resize', onVpResize);
+    // Remove old handlers
+    if (window.visualViewport && window._vpHandler) {
+      window.visualViewport.removeEventListener('resize', window._vpHandler);
+      window.visualViewport.removeEventListener('scroll', window._vpHandler);
+    }
+    window._vpHandler = _adjustChat;
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', _adjustChat);
+      window.visualViewport.addEventListener('scroll', _adjustChat);
+    }
+    // Fallback: focus/blur on the input itself
+    const cinput = document.getElementById('cinput');
+    if (cinput) {
+      cinput.addEventListener('focus', () => setTimeout(_adjustChat, 350));
+      cinput.addEventListener('blur', () => setTimeout(_adjustChat, 100));
+    }
   }
 }
 let _typTimer;
@@ -1774,11 +1811,15 @@ function closeMobileChat() {
   if (mlay) mlay.classList.remove('chat-open');
   document.body.classList.remove('in-chat');
   achat = null;
-  // Reset ccol bottom (keyboard may have changed it)
+  // Reset ccol and bnav (keyboard may have changed them)
+  clearInterval(window._presTimer);
   const ccol = document.getElementById('ccol');
-  if (ccol) ccol.style.bottom = '';
+  if (ccol) { ccol.style.bottom = ''; ccol.style.transition = ''; }
+  const bnav = document.getElementById('bnav');
+  if (bnav) bnav.style.display = '';
   if (window.visualViewport && window._vpHandler) {
     window.visualViewport.removeEventListener('resize', window._vpHandler);
+    window.visualViewport.removeEventListener('scroll', window._vpHandler);
     window._vpHandler = null;
   }
   document.querySelectorAll('#bnav button').forEach(b => b.classList.remove('active'));
