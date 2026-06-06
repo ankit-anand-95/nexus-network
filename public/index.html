@@ -2205,16 +2205,35 @@ async function renderExperts() {
         ${s.status==='confirmed'&&s.meeting_link ? `<a href="${s.meeting_link}" target="_blank" class="btn btn-o btn-sm"><i class="fas fa-video"></i> Join</a>` : ''}
       </div>`).join('') : `<div style="padding:24px;text-align:center;color:var(--sub);font-size:13px"><i class="fas fa-inbox" style="font-size:28px;opacity:.4;display:block;margin-bottom:8px"></i>No bookings yet</div>`;
 
+    // History: cancelled bookings (collapsed by default)
+    const cancelledSess = allEa.filter(s => s.status === 'cancelled' || s.status === 'declined');
+    const histRows = cancelledSess.length ? cancelledSess.slice(0,20).map(s => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);opacity:.7">
+        ${av({ name: s.learner_name, avatar_url: s.learner_avatar }, 'av40')}
+        <div style="flex:1;min-width:0">
+          <p style="margin:0 0 1px;font-size:12px;font-weight:700">${escHtml(s.learner_name||'Learner')}</p>
+          <p style="margin:0;font-size:11px;color:var(--sub)">${escHtml(s.topic||'Mentorship')} &bull; ${_fmtSlot(s.scheduled_at)}</p>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:#ef4444">Cancelled</span>
+      </div>`).join('') : '';
+
     mentorDash = `<div class="card" style="margin-bottom:20px">
       <div class="ch" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>🎓 My Sessions <span style="background:var(--primary);color:#fff;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px;font-weight:700">${myMs.length}</span></span>
         <button class="btn btn-p btn-sm" onclick="showAddSession()"><i class="fas fa-plus"></i> Create New Session</button>
       </div>
       ${sessionCards}
-      <div style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;background:var(--indigo-light);border-top:1px solid var(--border)">
-        Bookings from Learners ${pendingCount>0?`<span style="color:#f59e0b;margin-left:6px">${pendingCount} pending</span>`:''}
+      <div style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;background:var(--indigo-light);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span>Bookings from Learners ${pendingCount>0?`<span style="color:#f59e0b;margin-left:6px">${pendingCount} pending</span>`:''}</span>
       </div>
       <div>${sessRows}</div>
+      ${cancelledSess.length?`<details style="border-top:1px solid var(--border)">
+        <summary style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">
+          <span>History <span style="font-weight:400;opacity:.7">${cancelledSess.length} cancelled</span></span>
+          <i class="fas fa-chevron-down" style="font-size:10px"></i>
+        </summary>
+        <div>${histRows}</div>
+      </details>`:''}
     </div>`;
   }
 
@@ -2397,12 +2416,15 @@ async function bookSession(sessionId, expertName, sessionTitle, source) {
   }
   const slotRows = slots.map(s => {
     const label = new Date(s.key).toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-    return s.booked
-      ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);border:1.5px solid #fecaca;background:#fef2f2;margin-bottom:8px">
+    if (s.booked) return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);border:1.5px solid #fecaca;background:#fef2f2;margin-bottom:8px">
           <span style="font-size:13px;color:#ef4444;text-decoration:line-through">${label}</span>
-          <span style="font-size:11px;color:#ef4444;font-weight:700">Booked</span>
-         </div>`
-      : `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1.5px solid var(--primary);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${sessionId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}','${escHtml(sessionTitle||'')}','${e?._source||'new'}',${e?.user_id||0})">
+          <span style="font-size:11px;color:#ef4444;font-weight:700">Confirmed</span>
+         </div>`;
+    if (s.pending) return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);border:1.5px solid #fde68a;background:#fef3c7;margin-bottom:8px">
+          <span style="font-size:13px;color:#92400e;text-decoration:line-through">${label}</span>
+          <span style="font-size:11px;color:#b45309;font-weight:700">⏳ Pending</span>
+         </div>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1.5px solid var(--primary);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${sessionId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}','${escHtml(sessionTitle||'')}','${e?._source||'new'}',${e?.user_id||0})">
           <span style="font-size:13px;font-weight:600">${label}</span>
           <span class="btn btn-p btn-sm" style="pointer-events:none">Select</span>
          </div>`;
@@ -2603,13 +2625,18 @@ function _buildSlotPickerHTML() {
     const sel = window._slotHour === h;
     let bg='var(--inp)',border='var(--border)',col='var(--text)';
     if (existing?.booked){bg='#fef2f2';border='#fecaca';col='#ef4444';}
+    else if (existing?.pending){bg='#fef3c7';border='#fde68a';col='#b45309';}
     else if (existing){bg='#dcfce7';border='#bbf7d0';col='#16a34a';}
     else if (isPast){col='var(--sub)';}
     else if (sel){bg='var(--primary)';border='var(--primary)';col='#fff';}
-    const title = existing?.booked?'Already booked':existing?'Already added':isPast?'Past time':!window._slotDate?'Pick a date first':'';
-    return `<button ${disabled?'disabled':''} onclick="${!disabled?`_spHour(${h})`:''}" title="${title}"
-      style="padding:7px 4px;border-radius:8px;border:1.5px solid ${border};background:${bg};color:${col};font-size:12px;font-weight:600;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled&&!existing?.booked?.booked?'.55':'1'}">
-      ${label}${existing?.booked?' 🔴':existing?' ✓':''}
+    const title = existing?.booked?'Confirmed booking':existing?.pending?'Pending approval':existing?'Added (click to remove)':isPast?'Past time':!window._slotDate?'Pick a date first':'Click to add';
+    // Clicking a free slot adds it immediately; clicking added slot removes it
+    const clickFn = !window._slotDate||isPast ? '' :
+      existing && !existing.booked && !existing.pending ? `_spRemove('${window._slotDate}T${String(h).padStart(2,'0')}:00:00')` :
+      !existing ? `_spAdd('${window._slotDate}T${String(h).padStart(2,'0')}:00:00')` : '';
+    return `<button ${(!clickFn)?'disabled':''} onclick="${clickFn}" title="${title}"
+      style="padding:7px 4px;border-radius:8px;border:1.5px solid ${border};background:${bg};color:${col};font-size:12px;font-weight:600;cursor:${clickFn?'pointer':'not-allowed'};opacity:${(!clickFn&&!existing)?'.55':'1'}">
+      ${label}${existing?.booked?' 🔴':existing?.pending?' ⏳':existing?' ✓':''}
     </button>`;
   }).join('');
 
@@ -2622,10 +2649,10 @@ function _buildSlotPickerHTML() {
   const slotList = window._exSlots.length
     ? window._exSlots.map(s => {
         const dt = new Date(s.key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:${s.booked?'#fef2f2':'var(--indigo-light)'};border-radius:8px;margin-bottom:5px">
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:${s.booked?'#fef2f2':s.pending?'#fef3c7':'var(--indigo-light)'};border-radius:8px;margin-bottom:5px">
           <i class="fas fa-clock" style="font-size:11px;color:var(--sub)"></i>
           <span style="flex:1;font-size:13px">${dt}</span>
-          ${s.booked?'<span style="font-size:11px;color:#ef4444;font-weight:700">Booked</span>':`<button onclick="_spRemove('${s.key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px"><i class="fas fa-times"></i></button>`}
+          ${s.booked?'<span style="font-size:11px;color:#ef4444;font-weight:700">Confirmed</span>':s.pending?'<span style="font-size:11px;color:#b45309;font-weight:700">⏳ Pending</span>':`<button onclick="_spRemove('${s.key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px"><i class="fas fa-times"></i></button>`}
         </div>`;
       }).join('')
     : '<p style="font-size:13px;color:var(--sub);text-align:center;padding:8px 0">No slots added yet</p>';
@@ -2635,10 +2662,7 @@ function _buildSlotPickerHTML() {
     <div id="slot-day-scroll" style="overflow-x:auto;display:flex;gap:6px;padding-bottom:8px;margin-bottom:14px">${dayChips}</div>
     <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">${window._slotDate?'Pick a time':'↑ Pick a date first'}</p>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">${timeGrid}</div>
-    ${selISO?`<div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <span style="font-size:13px;font-weight:600">📅 ${new Date(selISO).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
-      <button class="btn btn-p btn-sm" onclick="_spAdd('${selISO}')"><i class="fas fa-plus"></i> Add</button>
-    </div>`:''}
+
     <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">Your Slots (${window._exSlots.length})</p>
     <div style="max-height:180px;overflow-y:auto">${slotList}</div>`;
 }
