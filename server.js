@@ -1122,7 +1122,12 @@ app.get('/api/posts/saved', auth, (req, res) => {
 });
 
 // ── TRENDING TOPICS ───────────────────────────────────────────────────────
+let _trendingCache = null, _trendingTs = 0;
 app.get('/api/trending', auth, (req, res) => {
+  // Serve from cache if < 5 minutes old
+  if (_trendingCache && Date.now() - _trendingTs < 5 * 60 * 1000) {
+    return res.json(_trendingCache);
+  }
   // Top posts by reactions in last 7 days
   const topPosts = db.prepare(`
     SELECT p.id, p.content, u.name as author_name, u.avatar_url as author_avatar,
@@ -1137,15 +1142,29 @@ app.get('/api/trending', auth, (req, res) => {
     ORDER BY reaction_count DESC, comment_count DESC
     LIMIT 5
   `).all();
-  // Hashtags / topics from post content
-  const allPosts = db.prepare("SELECT content FROM posts WHERE is_published=1 AND created_at > datetime('now','-7 days')").all();
+  // Hashtags extracted via SQL to avoid pulling all content into JS
+  const tagRows = db.prepare(`
+    SELECT content FROM posts
+    WHERE is_published=1 AND created_at > datetime('now','-7 days')
+    AND content LIKE '%#%'
+    LIMIT 500
+  `).all();
   const tagCount = {};
-  allPosts.forEach(p => {
+  tagRows.forEach(p => {
     const tags = (p.content || '').match(/#[\w]+/g) || [];
-    tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; });
+    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
   });
   const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
-  res.json({ top_posts: topPosts, trending_tags });
+  _trendingCache = { top_posts: topPosts, trending_tags };
+  _trendingTs = Date.now();
+  res.json(_trendingCache);
 });
 
-;
+;(/#[\w]+/g) || [];
+    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
+  });
+  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
+  _trendingCache = { top_posts: topPosts, trending_tags };
+  _trendingTs = Date.now();
+  res.json(_trendingCache);
+});

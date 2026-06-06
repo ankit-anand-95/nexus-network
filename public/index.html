@@ -326,7 +326,7 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   #mlay{grid-template-columns:1fr;height:calc(100dvh - 112px)}
   .mlist{height:100%;display:flex;flex-direction:column;overflow-y:auto}
   /* Chat panel: fixed, sits between top nav and bottom nav */
-  #ccol{position:fixed;top:56px;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
+  #ccol{position:fixed;top:56px;left:0;right:0;height:calc(100dvh - 112px - env(safe-area-inset-bottom,0px));background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
   #mlay.chat-open #ccol{display:flex}
   #mlay.chat-open .mlist{display:none}
   /* Keep bottom nav visible in chat for navigation */
@@ -521,10 +521,30 @@ let token = localStorage.getItem('nxtoken') || '';
 let me = null, socket = null, postsData = [], curPage = 'home';
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
+const _apiCache = new Map();
+// Paths cached aggressively (2 min) — analytics, trending, suggestions
+const _LONG_CACHE = ['/api/trending', '/api/analytics/me', '/api/connections/suggestions', '/api/jobs', '/api/users/me'];
+const _SHORT_CACHE = 30000; // 30s for everything else GET
+const _LONG_TTL   = 120000; // 2min for slow/stable endpoints
+function _apiTTL(path) {
+  return _LONG_CACHE.some(p => path.startsWith(p)) ? _LONG_TTL : _SHORT_CACHE;
+}
 async function api(path, opts = {}) {
+  const isGet = !opts.method || opts.method === 'GET';
+  if (isGet) {
+    const ttl = _apiTTL(path);
+    const hit = _apiCache.get(path);
+    if (hit && Date.now() - hit.ts < ttl) return hit.data;
+  }
   opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
   const r = await fetch(path, opts);
-  return r.json().catch(() => ({}));
+  const data = await r.json().catch(() => ({}));
+  if (isGet && r.ok) _apiCache.set(path, { data, ts: Date.now() });
+  return data;
+}
+function apiInvalidate(prefix) {
+  if (!prefix) { _apiCache.clear(); return; }
+  for (const k of _apiCache.keys()) { if (k.startsWith(prefix)) _apiCache.delete(k); }
 }
 function av(u, cls = 'av40') {
   const n = (u?.name || u?.author_name || 'U');
@@ -1712,27 +1732,25 @@ async function openChat(uid, name) {
   // Poll presence every 20s while chat is open (keeps indicator fresh)
   clearInterval(window._presTimer);
   window._presTimer = setInterval(() => { if (socket && achat) socket.emit('get_presence', { userId: achat }); }, 20000);
-  // Mobile keyboard: push #ccol above keyboard when input is focused
+  // Mobile keyboard: resize #ccol height to stay above keyboard
   if (window.innerWidth <= 768) {
     const _adjustChat = () => {
       const ccol = document.getElementById('ccol'); if (!ccol || !achat) return;
       const bnav = document.getElementById('bnav');
       const vp = window.visualViewport;
-      let keyboardH = 0;
-      if (vp) keyboardH = Math.max(0, window.innerHeight - vp.height - (vp.offsetTop || 0));
+      const vpH = vp ? vp.height : window.innerHeight;
+      const keyboardH = Math.max(0, window.innerHeight - vpH);
       if (keyboardH > 80) {
-        // Keyboard is open: shift ccol above keyboard, hide bnav
-        ccol.style.bottom = keyboardH + 'px';
-        ccol.style.transition = 'bottom .15s ease';
+        // Keyboard open: height = visual viewport - top nav (bnav hidden)
         if (bnav) bnav.style.display = 'none';
+        ccol.style.height = (vpH - 56) + 'px';
       } else {
-        // Keyboard closed: restore
-        ccol.style.bottom = '';
-        ccol.style.transition = '';
+        // Keyboard closed: reset to CSS value
         if (bnav) bnav.style.display = '';
+        ccol.style.height = '';
       }
       const mb = document.getElementById('cmsgs');
-      if (mb) mb.scrollTop = mb.scrollHeight;
+      if (mb) setTimeout(() => mb.scrollTop = mb.scrollHeight, 50);
     };
     // Remove old handlers
     if (window.visualViewport && window._vpHandler) {
@@ -1744,12 +1762,13 @@ async function openChat(uid, name) {
       window.visualViewport.addEventListener('resize', _adjustChat);
       window.visualViewport.addEventListener('scroll', _adjustChat);
     }
-    // Fallback: focus/blur on the input itself
+    // Fallback for browsers without visualViewport
     const cinput = document.getElementById('cinput');
     if (cinput) {
-      cinput.addEventListener('focus', () => setTimeout(_adjustChat, 350));
-      cinput.addEventListener('blur', () => setTimeout(_adjustChat, 100));
+      cinput.addEventListener('focus', () => { setTimeout(_adjustChat, 300); setTimeout(_adjustChat, 600); });
+      cinput.addEventListener('blur', () => setTimeout(_adjustChat, 150));
     }
+    _adjustChat(); // set initial height
   }
 }
 let _typTimer;
@@ -1814,7 +1833,7 @@ function closeMobileChat() {
   // Reset ccol and bnav (keyboard may have changed them)
   clearInterval(window._presTimer);
   const ccol = document.getElementById('ccol');
-  if (ccol) { ccol.style.bottom = ''; ccol.style.transition = ''; }
+  if (ccol) { ccol.style.height = ''; ccol.style.transition = ''; }
   const bnav = document.getElementById('bnav');
   if (bnav) bnav.style.display = '';
   if (window.visualViewport && window._vpHandler) {
