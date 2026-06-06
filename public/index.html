@@ -351,8 +351,20 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   /* ── LAYOUT ── */
   .two-col{grid-template-columns:1fr;gap:0}
   #sl{display:none}
-  .card{border-radius:10px}
+  #rs{display:none}
+  .card{border-radius:10px;overflow-x:hidden}
   .sug-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  /* Prevent all child elements from overflowing viewport */
+  #pr *{max-width:100%;box-sizing:border-box}
+  /* People rows must wrap on small screens */
+  .prow{flex-wrap:wrap;gap:10px}
+  .prow .pinfo{min-width:0;flex:1}
+  /* Mentor stat bar scrolls horizontally within card */
+  .slot-stats-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap !important}
+  /* Notification items */
+  .notif-item{overflow:hidden}
+  /* Job meta tags */
+  .jmeta{flex-wrap:wrap}
   /* ── FEED ── */
   .post-hdr{padding:12px 14px 0}
   .post-body{padding:10px 14px;font-size:13px}
@@ -751,6 +763,13 @@ function initSocket() {
       toast(`${icons[data.type]||'🔔'} ${data.content}`);
     }
     if (data?.type === 'connection_request' && curPage === 'network') renderNetwork();
+    // Belt-and-suspenders: also refresh experts page on any session notification
+    // (covers cases where session_update socket event is missed)
+    if (['session_confirmed','session_declined','session_cancelled','session_rescheduled','session_booked'].includes(data?.type)) {
+      apiInvalidate('/api/sessions');
+      apiInvalidate('/api/experts');
+      if (curPage === 'experts') renderExperts();
+    }
   });
 
   // ── REAL-TIME FEED EVENTS ──────────────────────────────────────────────────
@@ -812,8 +831,10 @@ function initSocket() {
   });
 
   socket.on('session_update', ({ sessionId, status }) => {
-    if (curPage === 'experts') { apiInvalidate('/api/sessions'); apiInvalidate('/api/experts'); renderExperts(); }
-    const msgs = { confirmed: '✅ Your session was accepted!', cancelled: 'Your session request was declined.' };
+    apiInvalidate('/api/sessions');
+    apiInvalidate('/api/experts');
+    if (curPage === 'experts') renderExperts();
+    const msgs = { confirmed: '✅ Your session was accepted!', cancelled: '❌ Your session was declined.' };
     if (msgs[status]) toast(msgs[status]);
     pollBadges();
   });
@@ -2038,7 +2059,7 @@ async function renderExperts() {
     const totalSlots = mySlots.length;
     const bookedSlots = mySlots.filter(s => s.booked).length;
     const freeSlots = totalSlots - bookedSlots;
-    const slotStatsHtml = `<div style="display:flex;gap:14px;padding:10px 20px;background:var(--indigo-light);border-bottom:1px solid var(--border);flex-wrap:wrap">
+    const slotStatsHtml = `<div class="slot-stats-bar" style="display:flex;gap:16px;padding:10px 16px;background:var(--indigo-light);border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:var(--primary)">${totalSlots}</div><div style="font-size:11px;color:var(--sub)">Total Slots</div></div>
       <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#22c55e">${freeSlots}</div><div style="font-size:11px;color:var(--sub)">Available</div></div>
       <div style="text-align:center"><div style="font-size:20px;font-weight:800;color:#f59e0b">${bookedSlots}</div><div style="font-size:11px;color:var(--sub)">Booked</div></div>
