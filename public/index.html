@@ -1055,6 +1055,8 @@ async function renderHome() {
     <div id="rs">${_skelPost()}</div>
   </div>`;
   document.getElementById('pr').innerHTML = skelHtml;
+  // Single shared analytics fetch — renderSB and renderRightSidebar both use this
+  window._homeAnalytics = api('/api/analytics/me').catch(() => ({ profile_views: 0, post_impressions: 0 }));
   // Sidebars and feed load fully in parallel — don't block feed on sidebars
   renderSB();           // fire-and-forget, updates #sl when ready
   renderRightSidebar(); // fire-and-forget, updates #rs when ready
@@ -1134,72 +1136,65 @@ function setFeedSort(s) {
 
 async function renderRightSidebar() {
   const rsEl = document.getElementById('rs'); if (!rsEl) return;
-  rsEl.innerHTML = `<div class="rs-card"><div class="skel skel-line w80" style="height:16px;margin-bottom:12px"></div><div class="skel skel-line w60" style="height:12px;margin-bottom:8px"></div><div class="skel skel-line w40" style="height:12px"></div></div>`;
-  const timeout = ms => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
+  const timeout = ms => new Promise((_, r) => setTimeout(() => r(new Error('t')), ms));
   const safe = (p, fb) => Promise.race([p, timeout(6000)]).catch(() => fb);
-  const [trending, analytics] = await Promise.all([
-    safe(api('/api/trending'), { top_posts:[], trending_tags:[] }),
-    safe(api('/api/analytics/me'), { profile_views:0, post_impressions:0 })
-  ]);
 
-  let html = '';
+  // Use shared analytics promise if renderHome pre-fetched it; else fetch fresh
+  const analyticsP = safe(window._homeAnalytics || api('/api/analytics/me'), { profile_views:0, post_impressions:0 });
+  const trendingP  = safe(api('/api/trending'), { top_posts:[], trending_tags:[] });
 
-  // Analytics mini card
-  html += `<div class="rs-card">
+  // ── Step 1: render analytics immediately when it arrives (fast, server-cached) ──
+  const analytics = await analyticsP;
+  if (!document.getElementById('rs')) return; // navigated away
+  rsEl.innerHTML = `<div class="rs-card">
     <div class="rs-hdr">Your Activity <span>Last 30 days</span></div>
     <div class="stat-row" onclick="go('profile')">
       <span class="stat-label"><i class="fas fa-eye" style="width:16px;color:var(--primary)"></i> Profile viewers</span>
-      <span class="stat-val">${analytics?.profile_views ?? '–'}</span>
+      <span class="stat-val">${analytics?.profile_views ?? 0}</span>
     </div>
     <div class="stat-row">
       <span class="stat-label"><i class="fas fa-chart-line" style="width:16px;color:var(--primary)"></i> Post impressions</span>
-      <span class="stat-val">${analytics?.post_impressions ?? '–'}</span>
+      <span class="stat-val">${analytics?.post_impressions ?? 0}</span>
     </div>
     <div style="padding:10px 16px">
       <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-chart-bar"></i> View full analytics</button>
     </div>
-  </div>`;
+  </div>
+  <div id="rs-trending"><div class="rs-card"><div class="skel skel-line w80" style="height:12px;margin-bottom:8px"></div><div class="skel skel-line w60" style="height:12px;margin-bottom:8px"></div><div class="skel skel-line w40" style="height:12px"></div></div></div>`;
 
-  // Trending topics / hashtags
+  // ── Step 2: fill trending + suggestions when they arrive ──
+  const trending = await trendingP;
+  const tEl = document.getElementById('rs-trending'); if (!tEl) return;
+  let tHtml = '';
   if (trending.trending_tags?.length) {
-    html += `<div class="rs-card">
+    tHtml += `<div class="rs-card">
       <div class="rs-hdr">Trending on Nexus <span></span></div>
       <div style="padding:12px 16px">${trending.trending_tags.map(t => `<span class="tag-chip" onclick="searchHashtag('${t.tag}')">${t.tag} <span style="font-weight:400;font-size:10px">${t.count}</span></span>`).join('')}</div>
     </div>`;
   }
-
-  // Top posts of the week
   if (trending.top_posts?.length) {
-    html += `<div class="rs-card">
+    tHtml += `<div class="rs-card">
       <div class="rs-hdr">Top This Week <span></span></div>
       ${trending.top_posts.map(p => `<div class="rs-item" onclick="document.getElementById('pc-${p.id}')?.scrollIntoView({behavior:'smooth'})">
         ${av({ name: p.author_name, avatar_url: p.author_avatar }, 'av40')}
-        <div class="rs-item-body">
-          <p>${escHtml((p.content||'').slice(0,80))}…</p>
-          <span><i class="fas fa-fire-flame-curved" style="color:#f59e0b"></i> ${p.reaction_count} reactions</span>
-        </div>
+        <div class="rs-item-body"><p>${escHtml((p.content||'').slice(0,80))}…</p>
+        <span><i class="fas fa-fire-flame-curved" style="color:#f59e0b"></i> ${p.reaction_count} reactions</span></div>
       </div>`).join('')}
     </div>`;
   }
-
-  // People to follow
+  // People You May Know (from cache)
   const sug = await api('/api/connections/suggestions').catch(() => []);
   if (Array.isArray(sug) && sug.length) {
-    html += `<div class="rs-card">
+    tHtml += `<div class="rs-card">
       <div class="rs-hdr">People You May Know <span></span></div>
       ${sug.slice(0,3).map(s => `<div class="rs-item" style="align-items:center">
-        ${av(s, 'av40')}
-        <div class="rs-item-body" style="flex:1">
-          <p>${escHtml(s.name)}</p>
-          <span>${escHtml(s.headline||'')}</span>
-        </div>
+        ${av(s, 'av40')}<div class="rs-item-body" style="flex:1"><p>${escHtml(s.name)}</p><span>${escHtml(s.headline||'')}</span></div>
         <button class="btn btn-o btn-sm" onclick="sendConn(${s.id},this)" style="flex-shrink:0"><i class="fas fa-user-plus"></i></button>
       </div>`).join('')}
       <div style="padding:10px 16px"><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('network')">See all</button></div>
     </div>`;
   }
-
-  rsEl.innerHTML = html || '<div class="rs-card"><div style="padding:16px;color:var(--sub);font-size:13px">No trending content yet — start posting!</div></div>';
+  tEl.innerHTML = tHtml || '';
 }
 
 function searchHashtag(tag) {
@@ -1240,10 +1235,10 @@ async function renderSB() {
       </div>
     </div>
   </div>`;
-  // Load analytics async
-  api('/api/analytics/me').then(a => {
-    const v = document.getElementById('sb-views'); if(v) v.textContent = a.profile_views ?? '–';
-    const im = document.getElementById('sb-impr'); if(im) im.textContent = a.post_impressions ?? '–';
+  // Use shared analytics promise from renderHome, or fetch fresh
+  (window._homeAnalytics || api('/api/analytics/me')).then(a => {
+    const v = document.getElementById('sb-views'); if(v) v.textContent = a?.profile_views ?? 0;
+    const im = document.getElementById('sb-impr'); if(im) im.textContent = a?.post_impressions ?? 0;
   }).catch(()=>{});
 }
 let cmode = '';
@@ -2125,21 +2120,4 @@ async function saveJob() {
       if (me && me.id) {
         document.getElementById('awrap').style.display = 'none';
         document.getElementById('appw').style.display = 'flex';
-        if (me.is_dark_mode) document.body.classList.add('dark');
-        clearInterval(window._badgeTimer);
-        initSocket(); go('home'); pollBadges(); window._badgeTimer = setInterval(pollBadges, 30000);
-        const avEl = document.getElementById('me-av-sm');
-        if (avEl && me) {
-          avEl.outerHTML = me.avatar_url
-            ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
-            : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
-        }
-        // Remove splash screen after home renders
-        setTimeout(() => { const l=document.getElementById('nxload'); if(l){l.style.opacity='0';setTimeout(()=>l.remove(),350);} }, 350);
-      } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); document.getElementById('nxload')?.remove(); }
-    } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); document.getElementById('nxload')?.remove(); }
-  } else { showAuth(); document.getElementById('nxload')?.remove(); }
-})();
-</script>
-</body>
-</html>
+        if (me.is_dark_mode) document.body.classList
