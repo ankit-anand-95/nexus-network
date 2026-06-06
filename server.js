@@ -149,6 +149,18 @@ function createNotif(userId, actorId, type, refId, content) {
   io.to(`user_${userId}`).emit('notification', { type, content });
 }
 
+// Slot key comparison — handles both UTC (old "...Z") and local bare strings (new "YYYY-MM-DDTHH:mm:ss")
+// Treats bare strings as IST (+05:30) since that's what the slot picker generates on the user's device
+function _sameSlot(k1, k2) {
+  if (!k1 || !k2) return false;
+  if (k1 === k2) return true;
+  const toMs = k => {
+    if (k.endsWith('Z') || k.includes('+')) return new Date(k).getTime();
+    return new Date(k + '+05:30').getTime(); // bare string → assume IST
+  };
+  try { return toMs(k1) === toMs(k2); } catch(e) { return false; }
+}
+
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 
 app.post('/api/auth/register', async (req, res) => {
@@ -1032,22 +1044,35 @@ app.put('/api/sessions/:id', auth, (req, res) => {
   const learnerUser = db.prepare(`SELECT name FROM users WHERE id=?`).get(session.learner_id);
   const _releaseSlot = () => {
     if (!session.slot_key) return;
-    // Restore slot in mentor_sessions (new system)
-    if (session.mentor_session_id) {
-      const ms = db.prepare(`SELECT availability_slots FROM mentor_sessions WHERE id=?`).get(session.mentor_session_id);
+    // Restore slot in mentor_sessions (new system) — use _sameSlot for timezone-tolerant matching
+    const msId = session.mentor_session_id;
+    if (msId) {
+      const ms = db.prepare(`SELECT availability_slots FROM mentor_sessions WHERE id=?`).get(msId);
       if (ms) {
         const slots = JSON.parse(ms.availability_slots || '[]');
-        const s = slots.find(x => x.key === session.slot_key);
+        const s = slots.find(x => _sameSlot(x.key, session.slot_key));
         if (s) { s.booked = false; delete s.booked_by; }
-        db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), session.mentor_session_id);
-        io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
+        db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), msId);
+        io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: msId, slots });
       }
+    } else {
+      // No mentor_session_id: scan ALL mentor_sessions for this expert and release the matching slot
+      const allMs = db.prepare(`SELECT id, availability_slots FROM mentor_sessions WHERE user_id=? AND is_active=1`).all(session.expert_id);
+      allMs.forEach(ms => {
+        const slots = JSON.parse(ms.availability_slots || '[]');
+        const s = slots.find(x => _sameSlot(x.key, session.slot_key));
+        if (s) {
+          s.booked = false; delete s.booked_by;
+          db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+          io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: ms.id, slots });
+        }
+      });
     }
     // Also restore in expert_profiles (legacy)
     const ep = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
     if (ep) {
       const slots = JSON.parse(ep.availability_slots || '[]');
-      const s = slots.find(x => x.key === session.slot_key);
+      const s = slots.find(x => _sameSlot(x.key, session.slot_key));
       if (s) { s.booked = false; delete s.booked_by; }
       db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
     }
@@ -1057,12 +1082,13 @@ app.put('/api/sessions/:id', auth, (req, res) => {
     io.to(`user_${session.learner_id}`).emit('session_update', { sessionId: session.id, status: 'confirmed' });
   } else if (status === 'cancelled') {
     _releaseSlot();
+    const sessionMeta = { title: session.topic, scheduledAt: session.scheduled_at, expertName: expertUser?.name, learnerName: learnerUser?.name };
     if (isExpert) {
-      createNotif(session.learner_id, session.expert_id, 'session_declined', session.id, `${expertUser.name} declined your session request`);
-      io.to(`user_${session.learner_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled' });
+      createNotif(session.learner_id, session.expert_id, 'session_declined', session.id, `${expertUser.name} declined your "${session.topic}" session request`);
+      io.to(`user_${session.learner_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled', meta: sessionMeta, cancelledBy: 'expert' });
     } else {
-      createNotif(session.expert_id, session.learner_id, 'session_cancelled', session.id, `${learnerUser.name} cancelled their session`);
-      io.to(`user_${session.expert_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled' });
+      createNotif(session.expert_id, session.learner_id, 'session_cancelled', session.id, `${learnerUser.name} cancelled their "${session.topic}" session`);
+      io.to(`user_${session.expert_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled', meta: sessionMeta, cancelledBy: 'learner' });
     }
   }
   if (status === 'completed' && rating) {
@@ -1080,33 +1106,47 @@ app.delete('/api/sessions/:id', auth, (req, res) => {
   if (!session) return res.status(404).json({ error: 'Not found' });
   if (session.learner_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
   if (session.status === 'completed') return res.status(400).json({ error: 'Cannot cancel a completed session' });
-  // Release slot in mentor_sessions (new system)
-  if (session.slot_key && session.mentor_session_id) {
-    const ms = db.prepare(`SELECT availability_slots FROM mentor_sessions WHERE id=?`).get(session.mentor_session_id);
-    if (ms) {
-      const slots = JSON.parse(ms.availability_slots || '[]');
-      const s = slots.find(x => x.key === session.slot_key);
-      if (s) { s.booked = false; delete s.booked_by; }
-      db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), session.mentor_session_id);
-      io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
-    }
-  }
-  // Also release from expert_profiles (legacy)
+  // Release slot — use _sameSlot for timezone-tolerant matching
   if (session.slot_key) {
+    const msId = session.mentor_session_id;
+    if (msId) {
+      const ms = db.prepare(`SELECT availability_slots FROM mentor_sessions WHERE id=?`).get(msId);
+      if (ms) {
+        const slots = JSON.parse(ms.availability_slots || '[]');
+        const s = slots.find(x => _sameSlot(x.key, session.slot_key));
+        if (s) { s.booked = false; delete s.booked_by; }
+        db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), msId);
+        io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: msId, slots });
+      }
+    } else {
+      // No mentor_session_id: scan all mentor_sessions for this expert
+      const allMs = db.prepare(`SELECT id, availability_slots FROM mentor_sessions WHERE user_id=? AND is_active=1`).all(session.expert_id);
+      allMs.forEach(ms => {
+        const slots = JSON.parse(ms.availability_slots || '[]');
+        const s = slots.find(x => _sameSlot(x.key, session.slot_key));
+        if (s) {
+          s.booked = false; delete s.booked_by;
+          db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+          io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: ms.id, slots });
+        }
+      });
+    }
+    // Also release from expert_profiles (legacy)
     const ep = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
     if (ep) {
       const slots = JSON.parse(ep.availability_slots || '[]');
-      const s = slots.find(x => x.key === session.slot_key);
+      const s = slots.find(x => _sameSlot(x.key, session.slot_key));
       if (s) { s.booked = false; delete s.booked_by; }
       db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
     }
   }
   db.prepare(`UPDATE interview_sessions SET status='cancelled' WHERE id=?`).run(session.id);
   const learner = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  // Notify mentor + real-time socket push
-  createNotif(session.expert_id, req.user.id, 'session_cancelled', session.id, `${learner.name} cancelled their session booking`);
-  io.to(`user_${session.expert_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled' });
-  res.json({ ok: true });
+  const expertUser = db.prepare(`SELECT name FROM users WHERE id=?`).get(session.expert_id);
+  const sessionMeta = { title: session.topic, scheduledAt: session.scheduled_at, expertName: expertUser?.name, learnerName: learner?.name };
+  createNotif(session.expert_id, req.user.id, 'session_cancelled', session.id, `${learner.name} cancelled their "${session.topic}" session`);
+  io.to(`user_${session.expert_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled', meta: sessionMeta, cancelledBy: 'learner' });
+  res.json({ ok: true, meta: sessionMeta });
 });
 
 // Learner reschedules a session
