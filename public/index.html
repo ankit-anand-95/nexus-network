@@ -223,6 +223,13 @@ body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter
 .ld{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--sub);gap:10px;font-size:14px}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* Skeleton shimmer */
+.skel{background:linear-gradient(90deg,var(--border) 25%,var(--inp) 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.skel-avatar{width:44px;height:44px;border-radius:50%;flex-shrink:0}
+.skel-line{height:12px;margin-bottom:8px}
+.skel-line.w60{width:60%}.skel-line.w80{width:80%}.skel-line.w100{width:100%}.skel-line.w40{width:40%}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e1b3a;color:#fff;padding:12px 22px;border-radius:var(--r-sm);font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.show{opacity:1}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -276,6 +283,9 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 .stat-row .stat-val{font-size:14px;font-weight:700;color:var(--primary)}
 /* ── BOTTOM NAV (mobile) ─────────────────────────────────── */
 #bnav{display:none;position:fixed;bottom:0;left:0;right:0;height:auto;min-height:56px;padding-bottom:env(safe-area-inset-bottom,0px);background:var(--card);border-top:1px solid var(--border);z-index:100;justify-content:space-around;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+.mob-si{display:flex;align-items:center;gap:12px;width:100%;padding:13px 22px;background:none;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text);text-align:left}
+.mob-si i{width:20px;text-align:center;color:var(--primary);font-size:16px}
+.mob-si:hover,.mob-si:active{background:var(--indigo-light)}
 #bnav button{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;cursor:pointer;color:var(--sub);font-size:10px;font-weight:600;padding:5px 10px;border-radius:10px;position:relative;min-width:50px;transition:.12s}
 #bnav button.active,#bnav button:hover{color:var(--primary)}
 #bnav button i{font-size:21px}
@@ -322,11 +332,13 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   /* Keep bottom nav visible in chat for navigation */
   body.in-chat #bnav{display:flex}
   /* ── CHAT INTERNALS ── */
-  #ctop{padding:10px 14px;flex-shrink:0;border-bottom:1px solid var(--border)}
-  #ctop h3{font-size:14px}
-  #cmsgs{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px 12px;box-sizing:border-box;width:100%}
+  #ctop{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-shrink:0;border-bottom:1px solid var(--border);flex-wrap:nowrap;min-height:52px}
+  #ctop h3{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #ctop p{font-size:11px;display:none}
+  #cinp{padding:8px 10px;padding-bottom:max(8px,env(safe-area-inset-bottom,8px));gap:6px;flex-shrink:0;border-top:1px solid var(--border);background:var(--card)}
+  #cinp input{font-size:13px;padding:9px 12px}
+  #cmsgs{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 12px;box-sizing:border-box;width:100%}
   .bub{max-width:78%;word-break:break-word;overflow-wrap:break-word;box-sizing:border-box}
-  #cinp{padding:8px 10px;gap:6px;flex-shrink:0;border-top:1px solid var(--border);background:var(--card)}
   #cinp input{font-size:13px;padding:9px 12px}
   /* ── BACK BUTTON ── */
   .back-to-threads{display:flex;align-items:center;gap:6px;background:var(--indigo-light);color:var(--primary);border:none;cursor:pointer;padding:7px 12px;border-radius:20px;font-size:13px;font-weight:700;flex-shrink:0}
@@ -473,10 +485,33 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 <div id="bnav">
   <button id="bnb-home" onclick="go('home')"><i class="fas fa-house"></i><span class="bnlbl">Home</span></button>
   <button id="bnb-network" onclick="go('network')"><i class="fas fa-users"></i><span class="bnlbl">Network</span><span class="bn-badge" id="bn-connbadge"></span></button>
-  <button id="bnb-jobs" onclick="go('jobs')"><i class="fas fa-briefcase"></i><span class="bnlbl">Jobs</span></button>
   <button id="bnb-messaging" onclick="go('messaging')"><i class="fas fa-comment-dots"></i><span class="bnlbl">Chat</span><span class="bn-badge" id="bn-mbadge"></span></button>
   <button id="bnb-notifications" onclick="go('notifications')"><i class="fas fa-bell"></i><span class="bnlbl">Alerts</span><span class="bn-badge" id="bn-nbadge"></span></button>
-  <button id="bnb-profile" onclick="toggleMeMenu()"><i class="fas fa-user"></i><span class="bnlbl">Me</span></button>
+  <button id="bnb-profile" onclick="openMobileSheet()"><i class="fas fa-user"></i><span class="bnlbl">Me</span></button>
+</div>
+
+<!-- MOBILE ME SHEET (bottom sheet with all options) -->
+<div id="mob-sheet-bg" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5)" onclick="closeMobileSheet()"></div>
+<div id="mob-sheet" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:1001;background:var(--card);border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,0px);box-shadow:0 -8px 32px rgba(0,0,0,.25);transform:translateY(100%);transition:transform .3s ease">
+  <div style="text-align:center;padding:10px 0 4px"><div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto"></div></div>
+  <div id="mob-sheet-profile" style="display:flex;align-items:center;gap:12px;padding:14px 20px 12px;border-bottom:1px solid var(--border)">
+    <div id="mob-sheet-av" style="width:48px;height:48px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex-shrink:0">?</div>
+    <div><p id="mob-sheet-name" style="font-weight:700;margin:0 0 2px;font-size:15px">…</p><p id="mob-sheet-hl" style="color:var(--sub);font-size:12px;margin:0">…</p></div>
+  </div>
+  <div style="padding:6px 0">
+    <button class="mob-si" onclick="closeMobileSheet();go('profile')"><i class="fas fa-user"></i>View Profile</button>
+    <button class="mob-si" onclick="closeMobileSheet();go('salary')"><i class="fas fa-indian-rupee-sign"></i>Salary Board</button>
+    <button class="mob-si" onclick="closeMobileSheet();go('reviews')"><i class="fas fa-star"></i>Company Reviews</button>
+    <button class="mob-si" onclick="closeMobileSheet();go('experts')"><i class="fas fa-graduation-cap"></i>Find Mentors</button>
+    <button class="mob-si" onclick="closeMobileSheet();go('jobs')"><i class="fas fa-briefcase"></i>Browse Jobs</button>
+    <button class="mob-si" onclick="closeMobileSheet();go('saved')"><i class="fas fa-bookmark"></i>Saved Posts</button>
+  </div>
+  <div style="border-top:1px solid var(--border);padding:6px 0">
+    <button class="mob-si" id="mob-dark-btn" onclick="toggleDark();updateMobDarkBtn()"><i class="fas fa-moon"></i><span id="mob-dark-lbl">Dark Mode</span></button>
+  </div>
+  <div style="border-top:1px solid var(--border);padding:6px 0 8px">
+    <button class="mob-si" style="color:#ef4444" onclick="closeMobileSheet();logout()"><i class="fas fa-sign-out-alt" style="color:#ef4444"></i>Sign Out</button>
+  </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -570,6 +605,30 @@ function toggleMeMenu() {
 }
 function closeMe() { const m = document.getElementById('me-menu'); if (m) m.style.display = 'none'; }
 document.addEventListener('click', e => { if (!document.getElementById('me-wrap')?.contains(e.target)) closeMe(); });
+function updateMobDarkBtn() {
+  const isDark = document.body.classList.contains('dark');
+  const lbl = document.getElementById('mob-dark-lbl'); if (lbl) lbl.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+  const icon = document.querySelector('#mob-dark-btn i'); if (icon) { icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon'; }
+}
+function openMobileSheet() {
+  const bg = document.getElementById('mob-sheet-bg'), sh = document.getElementById('mob-sheet'); if (!bg||!sh) return;
+  bg.style.display = 'block'; sh.style.display = 'block';
+  requestAnimationFrame(() => sh.style.transform = 'translateY(0)');
+  updateMobDarkBtn();
+  if (me) {
+    const nameEl = document.getElementById('mob-sheet-name'); if (nameEl) nameEl.textContent = me.name || '';
+    const hlEl = document.getElementById('mob-sheet-hl'); if (hlEl) hlEl.textContent = me.headline || me.email || '';
+    const avEl = document.getElementById('mob-sheet-av');
+    if (avEl) avEl.outerHTML = me.avatar_url
+      ? `<img id="mob-sheet-av" src="${me.avatar_url}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+      : `<div id="mob-sheet-av" style="width:48px;height:48px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex-shrink:0">${(me.name||'?')[0]}</div>`;
+  }
+}
+function closeMobileSheet() {
+  const bg = document.getElementById('mob-sheet-bg'), sh = document.getElementById('mob-sheet'); if (!bg||!sh) return;
+  sh.style.transform = 'translateY(100%)';
+  setTimeout(() => { bg.style.display = 'none'; sh.style.display = 'none'; }, 300);
+}
 function logout() {
   if (!confirm('Sign out of Nexus?')) return;
   localStorage.removeItem('nxtoken');
@@ -941,11 +1000,35 @@ async function renderSearch(q) {
 // ── HOME ──────────────────────────────────────────────────────────────────
 let _feedPage = 1, _feedLoading = false, _feedDone = false;
 
+function _skelPost() {
+  return `<div class="skel-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div class="skel skel-avatar"></div><div style="flex:1"><div class="skel skel-line w60"></div><div class="skel skel-line w40"></div></div></div><div class="skel skel-line w100"></div><div class="skel skel-line w80"></div><div class="skel skel-line w60"></div></div>`;
+}
+function _skelSidebar() {
+  return `<div class="skel-card" style="padding:0;overflow:hidden"><div style="height:60px" class="skel" style="border-radius:0"></div><div style="padding:16px"><div class="skel skel-line w60"></div><div class="skel skel-line w80"></div></div></div>`;
+}
+
 async function renderHome() {
   _feedPage = 1; _feedLoading = false; _feedDone = false;
-  document.getElementById('pr').innerHTML = `<div class="two-col" style="padding-top:8px"><div id="sl"></div><div><div id="ca" class="card"></div><div id="fsort" style="display:flex;align-items:center;gap:8px;padding:8px 0 4px"><span style="font-size:13px;color:var(--sub);font-weight:600">Sort by:</span><button class="btn btn-o btn-sm sort-btn active" id="sort-top" onclick="setFeedSort('top')"><i class="fas fa-fire-flame-curved"></i> Top</button><button class="btn btn-o btn-sm sort-btn" id="sort-new" onclick="setFeedSort('new')"><i class="fas fa-clock"></i> Recent</button></div><div id="feed"></div><div id="feed-sentinel" style="height:40px;display:flex;align-items:center;justify-content:center"></div></div><div id="rs"></div></div>`;
+  // Show skeleton immediately — no blank flash
+  const skelHtml = `<div class="two-col" style="padding-top:8px">
+    <div id="sl">${_skelSidebar()}</div>
+    <div>
+      <div id="ca" class="card"></div>
+      <div id="fsort" style="display:flex;align-items:center;gap:8px;padding:8px 0 4px">
+        <span style="font-size:13px;color:var(--sub);font-weight:600">Sort by:</span>
+        <button class="btn btn-o btn-sm sort-btn active" id="sort-top" onclick="setFeedSort('top')"><i class="fas fa-fire-flame-curved"></i> Top</button>
+        <button class="btn btn-o btn-sm sort-btn" id="sort-new" onclick="setFeedSort('new')"><i class="fas fa-clock"></i> Recent</button>
+      </div>
+      <div id="feed">${_skelPost()}${_skelPost()}${_skelPost()}</div>
+      <div id="feed-sentinel" style="height:40px;display:flex;align-items:center;justify-content:center"></div>
+    </div>
+    <div id="rs">${_skelPost()}</div>
+  </div>`;
+  document.getElementById('pr').innerHTML = skelHtml;
+  // Fetch everything in parallel, then replace skeletons
   await Promise.all([renderSB(), renderRightSidebar()]);
   renderComposer();
+  document.getElementById('feed').innerHTML = '';
   await loadMorePosts();
   // Infinite scroll observer
   const sentinel = document.getElementById('feed-sentinel');
@@ -956,7 +1039,6 @@ async function renderHome() {
     obs.observe(sentinel);
   }
   clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
-  // New posts are pushed via socket (new_post event) — no polling needed
 }
 
 let _feedLastTs = null; // ISO timestamp of newest post in feed
@@ -1619,6 +1701,19 @@ async function openChat(uid, name) {
     <div id="cinp"><button onclick="openEmojiPicker('cinput',this)" class="emoji-trig" title="Emoji"><i class="far fa-face-smile"></i></button><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
   if (socket) socket.emit('get_presence', { userId: uid });
+  // iOS keyboard: push #ccol up when keyboard opens so input stays visible
+  if (window.visualViewport && window.innerWidth <= 640) {
+    const onVpResize = () => {
+      const ccol = document.getElementById('ccol'); if (!ccol) return;
+      const keyboardH = window.innerHeight - window.visualViewport.height;
+      const bnav = document.getElementById('bnav');
+      const bnavH = bnav ? bnav.offsetHeight : 56;
+      ccol.style.bottom = (keyboardH > 50 ? keyboardH : bnavH) + 'px';
+    };
+    window.visualViewport.removeEventListener('resize', window._vpHandler);
+    window._vpHandler = onVpResize;
+    window.visualViewport.addEventListener('resize', onVpResize);
+  }
 }
 let _typTimer;
 function emitTyp() {
@@ -1679,7 +1774,13 @@ function closeMobileChat() {
   if (mlay) mlay.classList.remove('chat-open');
   document.body.classList.remove('in-chat');
   achat = null;
-  // Re-highlight messaging in bottom nav
+  // Reset ccol bottom (keyboard may have changed it)
+  const ccol = document.getElementById('ccol');
+  if (ccol) ccol.style.bottom = '';
+  if (window.visualViewport && window._vpHandler) {
+    window.visualViewport.removeEventListener('resize', window._vpHandler);
+    window._vpHandler = null;
+  }
   document.querySelectorAll('#bnav button').forEach(b => b.classList.remove('active'));
   const bnb = document.getElementById('bnb-messaging'); if (bnb) bnb.classList.add('active');
 }
