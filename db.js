@@ -349,4 +349,36 @@ if (process.env.CLEAR_SESSIONS === '1') {
   console.log('[db] Reset complete — remove CLEAR_SESSIONS from Railway env vars now');
 }
 
+// ── CANCELLED SESSIONS CLEANUP ── Set CLEAR_CANCELLED=1, deploy once, then remove it
+if (process.env.CLEAR_CANCELLED === '1') {
+  console.log('[db] CLEAR_CANCELLED=1 — removing cancelled/declined sessions and restoring their slots...');
+  const cancelled = db.prepare(`SELECT * FROM interview_sessions WHERE status IN ('cancelled','declined')`).all();
+  cancelled.forEach(s => {
+    // Restore slot in mentor_sessions
+    if (s.mentor_session_id) {
+      const ms = db.prepare(`SELECT id, availability_slots FROM mentor_sessions WHERE id=?`).get(s.mentor_session_id);
+      if (ms) {
+        const slots = JSON.parse(ms.availability_slots || '[]').map(sl => {
+          if (sl.key === s.slot_key) { const { booked_by, ...rest } = sl; return { ...rest, booked: false }; }
+          return sl;
+        });
+        db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+      }
+    }
+    // Also restore in expert_profiles
+    if (s.expert_id) {
+      const ep = db.prepare(`SELECT user_id, availability_slots FROM expert_profiles WHERE user_id=?`).get(s.expert_id);
+      if (ep && s.slot_key) {
+        const slots = JSON.parse(ep.availability_slots || '[]').map(sl => {
+          if (sl.key === s.slot_key) { const { booked_by, ...rest } = sl; return { ...rest, booked: false }; }
+          return sl;
+        });
+        db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), ep.user_id);
+      }
+    }
+  });
+  db.exec(`DELETE FROM interview_sessions WHERE status IN ('cancelled','declined')`);
+  console.log('[db] Cleared ' + cancelled.length + ' cancelled sessions — remove CLEAR_CANCELLED from Railway env vars now');
+}
+
 module.exports = db;

@@ -927,31 +927,37 @@ app.delete('/api/mentor-sessions/:id', auth, (req, res) => {
 
 app.post('/api/mentor-sessions/:id/book-slot', auth, (req, res) => {
   const { slotKey } = req.body;
-  let result;
+  if (!slotKey) return res.status(400).json({ error: 'slotKey is required' });
+  // node:sqlite has no .transaction() — use explicit BEGIN/COMMIT/ROLLBACK
+  let ms, slots, slot, sessionInfo;
   try {
-    result = db.transaction(() => {
-      const ms = db.prepare(`SELECT * FROM mentor_sessions WHERE id=? AND is_active=1`).get(req.params.id);
-      if (!ms) return { error: 'Session not found', status: 404 };
-      if (ms.user_id === req.user.id) return { error: 'Cannot book your own session', status: 400 };
-      const slots = JSON.parse(ms.availability_slots || '[]');
-      const slot = slots.find(s => s.key === slotKey);
-      if (!slot) return { error: 'Slot not found', status: 404 };
-      if (slot.booked) return { error: 'This slot was just booked by someone else. Please choose another.', status: 409 };
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      ms = db.prepare('SELECT * FROM mentor_sessions WHERE id=? AND is_active=1').get(req.params.id);
+      if (!ms) { db.exec('ROLLBACK'); return res.status(404).json({ error: 'Session not found' }); }
+      if (ms.user_id === req.user.id) { db.exec('ROLLBACK'); return res.status(400).json({ error: 'Cannot book your own session' }); }
+      slots = JSON.parse(ms.availability_slots || '[]');
+      slot = slots.find(s => s.key === slotKey);
+      if (!slot) { db.exec('ROLLBACK'); return res.status(404).json({ error: 'Slot not found' }); }
+      if (slot.booked) { db.exec('ROLLBACK'); return res.status(409).json({ error: 'This slot was just booked by someone else. Please choose another.' }); }
       slot.booked = true; slot.booked_by = req.user.id;
-      db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
-      const sessionInfo = db.prepare(`INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status, mentor_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(slots), ms.id);
+      sessionInfo = db.prepare('INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status, mentor_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
         .run(ms.user_id, req.user.id, ms.title, 'Mentorship', slotKey, 60, ms.meeting_link || '', ms.price_per_session || 500, slotKey, 'pending', ms.id);
-      return { ok: true, sessionInfo, ms, slots };
-    })();
+      db.exec('COMMIT');
+    } catch(innerE) {
+      try { db.exec('ROLLBACK'); } catch(_) {}
+      console.error('[book-slot] error:', innerE.message);
+      return res.status(500).json({ error: 'Booking failed, please try again' });
+    }
+    const actor = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
+    createNotif(ms.user_id, req.user.id, 'session_booked', sessionInfo.lastInsertRowid, actor.name + ' requested a "' + ms.title + '" session — please accept or decline');
+    io.emit('mentor_slot_booked', { expertId: ms.user_id, sessionId: ms.id, slots });
+    res.json({ ok: true, meeting_link: ms.meeting_link, session_id: sessionInfo.lastInsertRowid });
   } catch(e) {
+    console.error('[book-slot] outer error:', e.message);
     return res.status(500).json({ error: 'Booking failed, please try again' });
   }
-  if (result.error) return res.status(result.status).json({ error: result.error });
-  const { ms, slots, sessionInfo } = result;
-  const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  createNotif(ms.user_id, req.user.id, 'session_booked', sessionInfo.lastInsertRowid, `${actor.name} requested a "${ms.title}" session — please accept or decline`);
-  io.emit('mentor_slot_booked', { expertId: ms.user_id, sessionId: ms.id, slots });
-  res.json({ ok: true, meeting_link: ms.meeting_link, session_id: sessionInfo.lastInsertRowid });
 });
 
 // ── EXPERTS (union of mentor_sessions + legacy expert_profiles) ──────────

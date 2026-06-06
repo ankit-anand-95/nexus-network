@@ -2159,7 +2159,9 @@ async function renderExperts() {
   let mentorDash = '';
   if (isMentor) {
     const expSess = await api('/api/sessions?role=expert').catch(() => []);
-    const ea = Array.isArray(expSess) ? expSess : [];
+    const allEa = Array.isArray(expSess) ? expSess : [];
+    // Only show active (pending/confirmed) bookings in mentor dash — hide cancelled clutter
+    const ea = allEa.filter(s => s.status === 'pending' || s.status === 'confirmed');
     const pendingCount = ea.filter(s => s.status === 'pending').length;
 
     // Per-session cards with inline Edit button
