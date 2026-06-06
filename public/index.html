@@ -9,6 +9,17 @@
 :root{--primary:#6366f1;--primary-dark:#4f46e5;--secondary:#8b5cf6;--bg:#f3f4f8;--card:#fff;--text:#1e1b3a;--sub:#6b7280;--border:#e5e7eb;--inp:#f9fafb;--indigo-light:#eef2ff;--r:16px;--r-sm:10px;--shadow:0 2px 12px rgba(99,102,241,.08)}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);transition:background .2s,color .2s}
 body.dark{--bg:#0f0e1a;--card:#1a1830;--text:#e8e6f0;--sub:#9ca3af;--border:#2d2b45;--inp:#221f3a;--indigo-light:#1e1b3a;--shadow:0 2px 12px rgba(0,0,0,.4)}
+/* ── Professional Themes ── (accent only; works in both light + dark mode) */
+body.t-ocean{--primary:#0ea5e9;--primary-dark:#0284c7;--secondary:#38bdf8;--indigo-light:#e0f2fe}
+body.dark.t-ocean{--indigo-light:#0c2233}
+body.t-emerald{--primary:#10b981;--primary-dark:#059669;--secondary:#34d399;--indigo-light:#d1fae5}
+body.dark.t-emerald{--indigo-light:#052e16}
+body.t-violet{--primary:#8b5cf6;--primary-dark:#7c3aed;--secondary:#a78bfa;--indigo-light:#ede9fe}
+body.dark.t-violet{--indigo-light:#2e1065}
+body.t-rose{--primary:#f43f5e;--primary-dark:#e11d48;--secondary:#fb7185;--indigo-light:#ffe4e6}
+body.dark.t-rose{--indigo-light:#2d0a14}
+body.t-amber{--primary:#d97706;--primary-dark:#b45309;--secondary:#fbbf24;--indigo-light:#fef3c7}
+body.dark.t-amber{--indigo-light:#1c1400}
 
 /* NAV */
 nav{position:fixed;top:0;left:0;right:0;height:60px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;z-index:100;box-shadow:var(--shadow)}
@@ -506,6 +517,17 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
           <a href="#" class="me-item" onclick="closeMe();go('notifications')"><i class="fas fa-bell"></i>Notifications</a>
           <hr class="me-sep">
           <a href="#" class="me-item" onclick="closeMe();toggleDark()"><i class="fas fa-moon"></i>Toggle Dark Mode</a>
+          <div style="padding:8px 14px">
+            <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">Accent Theme</p>
+            <div style="display:flex;gap:7px">
+              <button onclick="setTheme('')" title="Indigo" id="t-default" style="width:22px;height:22px;border-radius:50%;background:#6366f1;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+              <button onclick="setTheme('t-ocean')" title="Ocean" id="t-ocean" style="width:22px;height:22px;border-radius:50%;background:#0ea5e9;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+              <button onclick="setTheme('t-emerald')" title="Emerald" id="t-emerald" style="width:22px;height:22px;border-radius:50%;background:#10b981;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+              <button onclick="setTheme('t-violet')" title="Violet" id="t-violet" style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+              <button onclick="setTheme('t-rose')" title="Rose" id="t-rose" style="width:22px;height:22px;border-radius:50%;background:#f43f5e;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+              <button onclick="setTheme('t-amber')" title="Amber" id="t-amber" style="width:22px;height:22px;border-radius:50%;background:#d97706;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+            </div>
+          </div>
           <hr class="me-sep">
           <a href="#" class="me-item danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i>Sign Out</a>
         </div>
@@ -544,6 +566,17 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   </div>
   <div style="border-top:1px solid var(--border);padding:6px 0">
     <button class="mob-si" id="mob-dark-btn" onclick="toggleDark();updateMobDarkBtn()"><i class="fas fa-moon"></i><span id="mob-dark-lbl">Dark Mode</span></button>
+  </div>
+  <div style="border-top:1px solid var(--border);padding:10px 20px">
+    <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Accent Theme</p>
+    <div style="display:flex;gap:9px">
+      <button onclick="setTheme('');closeMobileSheet()" title="Indigo" style="width:26px;height:26px;border-radius:50%;background:#6366f1;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+      <button onclick="setTheme('t-ocean');closeMobileSheet()" title="Ocean" style="width:26px;height:26px;border-radius:50%;background:#0ea5e9;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+      <button onclick="setTheme('t-emerald');closeMobileSheet()" title="Emerald" style="width:26px;height:26px;border-radius:50%;background:#10b981;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+      <button onclick="setTheme('t-violet');closeMobileSheet()" title="Violet" style="width:26px;height:26px;border-radius:50%;background:#8b5cf6;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+      <button onclick="setTheme('t-rose');closeMobileSheet()" title="Rose" style="width:26px;height:26px;border-radius:50%;background:#f43f5e;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+      <button onclick="setTheme('t-amber');closeMobileSheet()" title="Amber" style="width:26px;height:26px;border-radius:50%;background:#d97706;border:2px solid var(--border);cursor:pointer;outline:none"></button>
+    </div>
   </div>
   <div style="border-top:1px solid var(--border);padding:6px 0 8px">
     <button class="mob-si" style="color:#ef4444" onclick="closeMobileSheet();logout()"><i class="fas fa-sign-out-alt" style="color:#ef4444"></i>Sign Out</button>
@@ -648,6 +681,26 @@ function toggleDark() {
   localStorage.setItem('nxdark', isDark ? '1' : '0');
   api('/api/users/me', { method: 'PUT', body: JSON.stringify({ is_dark_mode: isDark ? 1 : 0 }) });
 }
+const _themes = ['t-ocean','t-emerald','t-violet','t-rose','t-amber'];
+function setTheme(t) {
+  document.body.classList.remove(..._themes);
+  if (t) document.body.classList.add(t);
+  localStorage.setItem('nx-theme', t || '');
+  // highlight active swatch in desktop menu
+  ['t-default','t-ocean','t-emerald','t-violet','t-rose','t-amber'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.boxShadow = '';
+  });
+  const activeId = t || 't-default';
+  const act = document.getElementById(activeId);
+  if (act) act.style.boxShadow = '0 0 0 3px var(--primary),0 0 0 5px var(--card)';
+  closeMe();
+}
+// Apply saved theme immediately on boot
+(function() {
+  const saved = localStorage.getItem('nx-theme');
+  if (saved) { document.body.classList.remove(...['t-ocean','t-emerald','t-violet','t-rose','t-amber']); document.body.classList.add(saved); }
+})();
 function toggleMeMenu() {
   const menu = document.getElementById('me-menu');
   if (!menu) return;
@@ -2054,7 +2107,12 @@ async function renderSaved() {
 
 async function renderNotifs() {
   const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
-  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${_fmtNotifContent(x.content)}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
+  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => {
+    // If I'm the actor, rephrase from my perspective ("You rescheduled" not "Rahul rescheduled")
+    let txt = _fmtNotifContent(x.content);
+    if (me && x.actor_id === me.id && x.actor_name) txt = txt.replace(x.actor_name, 'You');
+    return `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${txt}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`;
+  }).join('').join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
 }
 
 async function editSal(id) {
