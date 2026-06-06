@@ -1159,12 +1159,3 @@ app.get('/api/trending', auth, (req, res) => {
   _trendingTs = Date.now();
   res.json(_trendingCache);
 });
-
-;(/#[\w]+/g) || [];
-    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
-  });
-  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
-  _trendingCache = { top_posts: topPosts, trending_tags };
-  _trendingTs = Date.now();
-  res.json(_trendingCache);
-});
