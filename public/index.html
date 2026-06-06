@@ -380,10 +380,8 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   /* ── COMPOSER ── */
   .comp-wrap{padding:12px 14px 6px}
   .comp-ta{min-height:72px;font-size:16px !important}
-  /* Icon-only buttons on mobile — hide the text labels */
+  /* Icon-only buttons on mobile — hide the text labels, keep icons + Anonymous label */
   .cbtn-lbl{display:none}
-  /* Show short "Anon" label instead of "Anonymous" on mobile */
-  .cbtn-mob-lbl{display:inline}
   .comp-acts{padding:6px 12px 10px;gap:6px;flex-wrap:nowrap;align-items:center;overflow:visible}
   .cbtn{padding:8px 10px;font-size:15px;gap:0;min-width:0;flex-shrink:0}
   .anon-lbl{font-size:12px;flex-shrink:0;white-space:nowrap}
@@ -408,16 +406,13 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   /* Always full-width via position:fixed left:0 right:0 — ensure content doesn't overflow */
   #mob-sheet{overflow-x:hidden;box-sizing:border-box;max-width:100vw}
   #mob-sheet *{box-sizing:border-box}
-  /* Profile header row: avatar is flex-shrink:0, text div must shrink */
+  /* Profile header row: first child (avatar) stays fixed-size, second child (text) fills rest */
   #mob-sheet-profile{overflow:hidden}
-  #mob-sheet-profile > div{min-width:0;overflow:hidden;flex:1}
+  #mob-sheet-profile > *:first-child{flex-shrink:0 !important;width:48px !important;height:48px !important;border-radius:50% !important;flex:none !important}
+  #mob-sheet-profile > div:last-child{min-width:0;overflow:hidden;flex:1}
   #mob-sheet-profile p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
   /* ── SALARY / REVIEW / EXPERT CARDS ── */
   .rev-card,.sal-card,.expert-card{overflow:hidden;box-sizing:border-box;width:100%}
-}
-/* Desktop: hide mobile-only labels */
-@media(min-width:641px){
-  .cbtn-mob-lbl{display:none}
 }
 /* Very small phones */
 @media(max-width:380px){
@@ -1356,7 +1351,7 @@ function renderComposer() {
     <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i><span class="cbtn-lbl"> Schedule</span></button>
     <button class="cbtn" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊<span class="cbtn-lbl"> Emoji</span></button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0">
-      <label class="anon-lbl" style="margin-left:0"><input type="checkbox" id="anonchk"> <span class="cbtn-lbl">Anonymous</span><span class="cbtn-mob-lbl">Anon</span></label>
+      <label class="anon-lbl" style="margin-left:0"><input type="checkbox" id="anonchk"> Anonymous</label>
       <button class="btn btn-p btn-sm" onclick="submitPost()"><i class="fas fa-paper-plane"></i><span class="cbtn-lbl"> Post</span></button>
     </div>
   </div>`;
@@ -1838,16 +1833,23 @@ async function openChat(uid, name) {
   // Poll presence every 20s while chat is open (keeps indicator fresh)
   clearInterval(window._presTimer);
   window._presTimer = setInterval(() => { if (socket && achat) socket.emit('get_presence', { userId: achat }); }, 20000);
-  // Mobile: always size #ccol to match the visual viewport (handles keyboard open/close automatically)
+  // Mobile: resize #ccol to match visual viewport so keyboard doesn't overlap chat
   if (window.innerWidth <= 768) {
     const _adjustChat = () => {
       const ccol = document.getElementById('ccol'); if (!ccol || !achat) return;
       const vp = window.visualViewport;
+      // vp.height = visible area height (shrinks when keyboard appears)
+      // vp.offsetTop = how far visual viewport is scrolled within layout viewport (iOS)
       const vpH = vp ? vp.height : window.innerHeight;
-      ccol.style.height = (vpH - 56) + 'px';
+      const vpTop = vp ? (vp.offsetTop || 0) : 0;
+      const navH = 56;
+      ccol.style.height = Math.max(120, vpH - navH) + 'px';
+      // On iOS, fixed elements may need explicit top when visual viewport scrolls
+      ccol.style.top = (navH + vpTop) + 'px';
       const mb = document.getElementById('cmsgs');
-      if (mb) setTimeout(() => mb.scrollTop = mb.scrollHeight, 50);
+      if (mb) { mb.scrollTop = mb.scrollHeight; }
     };
+    // Remove old listeners before adding new ones
     if (window.visualViewport && window._vpHandler) {
       window.visualViewport.removeEventListener('resize', window._vpHandler);
       window.visualViewport.removeEventListener('scroll', window._vpHandler);
@@ -1858,6 +1860,15 @@ async function openChat(uid, name) {
       window.visualViewport.addEventListener('scroll', _adjustChat);
     }
     window.addEventListener('resize', _adjustChat);
+    // Also fire after input focus (keyboard animation takes ~300ms)
+    const cinput = document.getElementById('cinput');
+    if (cinput) {
+      cinput.addEventListener('focus', () => {
+        setTimeout(_adjustChat, 100);
+        setTimeout(_adjustChat, 350); // after keyboard fully appears
+      });
+      cinput.addEventListener('blur', () => setTimeout(_adjustChat, 350));
+    }
     _adjustChat(); // set immediately
   }
 }
