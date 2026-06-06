@@ -904,6 +904,13 @@ function initSocket() {
     }
   });
 
+  // Mentor session created/edited/deleted — refresh experts list for all users
+  socket.on('experts_updated', () => {
+    apiInvalidate('/api/experts');
+    apiInvalidate('/api/mentor-sessions');
+    if (curPage === 'experts') renderExperts();
+  });
+
   // Real-time analytics — profile viewed or post engaged
   socket.on('analytics_update', () => {
     apiInvalidate('/api/analytics/me');
@@ -2263,7 +2270,7 @@ async function renderExperts() {
       <p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 4px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub);font-size:12px">/session</span></p>
       ${slotInfo}
       ${bookable
-        ? `<button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.id},'${escHtml(e.name||'Mentor').replace(/'/g,"\\'")}','${escHtml(e.title||'').replace(/'/g,"\\'")}')"><i class="fas fa-video"></i> Book Session</button>`
+        ? `<button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.id},'${escHtml(e.name||'Mentor').replace(/'/g,"\\'")}','${escHtml(e.title||'').replace(/'/g,"\\'")}','${e.source||'new'}')"><i class="fas fa-video"></i> Book Session</button>`
         : `<button class="btn btn-g btn-sm" style="width:100%;justify-content:center" disabled><i class="fas fa-calendar-times"></i> Fully Booked</button>`}
     </div>`;
   };
@@ -2369,9 +2376,10 @@ async function confirmReschedule(sessionId, newSlotKey, expertName) {
   toast(`Rescheduled! ${expertName} has been notified to confirm. ✅`);
   renderExperts();
 }
-async function bookSession(sessionId, expertName, sessionTitle) {
+async function bookSession(sessionId, expertName, sessionTitle, source) {
   const experts = await api('/api/experts');
   const e = Array.isArray(experts) ? experts.find(x => x.id == sessionId) : null;
+  if (e) e._source = source || e.source || 'new';
   const slots = Array.isArray(e?.availability_slots) ? e.availability_slots : [];
   if (!slots.length) {
     showModal(`<h2 style="margin-bottom:4px">Book: ${escHtml(sessionTitle||expertName)}</h2>
@@ -2392,7 +2400,7 @@ async function bookSession(sessionId, expertName, sessionTitle) {
           <span style="font-size:13px;color:#ef4444;text-decoration:line-through">${label}</span>
           <span style="font-size:11px;color:#ef4444;font-weight:700">Booked</span>
          </div>`
-      : `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1.5px solid var(--primary);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${sessionId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}','${escHtml(sessionTitle||'')}')">
+      : `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1.5px solid var(--primary);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${sessionId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}','${escHtml(sessionTitle||'')}','${e?._source||'new'}',${e?.user_id||0})">
           <span style="font-size:13px;font-weight:600">${label}</span>
           <span class="btn btn-p btn-sm" style="pointer-events:none">Select</span>
          </div>`;
@@ -2403,9 +2411,18 @@ async function bookSession(sessionId, expertName, sessionTitle) {
     <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Pick a time slot</p>
     <div style="max-height:340px;overflow-y:auto">${slotRows}</div>`);
 }
-async function confirmBookSlot(sessionId, slotKey, expertName, meetingLink, sessionTitle) {
-  const r = await api(`/api/mentor-sessions/${sessionId}/book-slot`, { method:'POST', body: JSON.stringify({ slotKey }) });
-  if (r.error) { toast('Error: ' + r.error); return; }
+async function confirmBookSlot(sessionId, slotKey, expertName, meetingLink, sessionTitle, source, expertUserId) {
+  let r;
+  if (source === 'legacy') {
+    r = await api('/api/sessions', { method:'POST', body: JSON.stringify({
+      expert_id: expertUserId, topic: sessionTitle || 'Mentorship Session',
+      session_type: 'Mentorship', scheduled_at: slotKey, slot_key: slotKey,
+      duration_minutes: 60, meeting_link: meetingLink, price: 500
+    })});
+  } else {
+    r = await api(`/api/mentor-sessions/${sessionId}/book-slot`, { method:'POST', body: JSON.stringify({ slotKey }) });
+  }
+  if (r && r.error) { toast('Error: ' + r.error); return; }
   apiInvalidate('/api/experts'); apiInvalidate('/api/sessions'); apiInvalidate('/api/mentor-sessions');
   closeModal();
   showModal(`<div style="text-align:center;padding:12px 0">

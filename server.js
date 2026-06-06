@@ -898,6 +898,8 @@ app.post('/api/mentor-sessions', auth, (req, res) => {
   const ep = db.prepare(`SELECT id FROM expert_profiles WHERE user_id=?`).get(req.user.id);
   if (!ep) db.prepare(`INSERT INTO expert_profiles (user_id, bio, expertise, price_per_session, meeting_link, availability_slots) VALUES (?,?,?,?,?,?)`)
     .run(req.user.id, bio || '', JSON.stringify([expertise]), price_per_session || 500, meeting_link || '', '[]');
+  // Notify all clients a new session is available
+  io.emit('experts_updated', { expertId: req.user.id });
   res.json({ id: info.lastInsertRowid, ok: true });
 });
 
@@ -905,15 +907,21 @@ app.put('/api/mentor-sessions/:id', auth, (req, res) => {
   const ms = db.prepare(`SELECT * FROM mentor_sessions WHERE id=? AND user_id=?`).get(req.params.id, req.user.id);
   if (!ms) return res.status(404).json({ error: 'Not found' });
   const { title, expertise, price_per_session, meeting_link, bio, availability_slots } = req.body;
+  const newSlots = availability_slots ?? JSON.parse(ms.availability_slots || '[]');
   db.prepare(`UPDATE mentor_sessions SET title=?, expertise=?, price_per_session=?, meeting_link=?, bio=?, availability_slots=? WHERE id=?`)
-    .run(title ?? ms.title, expertise ?? ms.expertise, price_per_session ?? ms.price_per_session, meeting_link ?? ms.meeting_link, bio ?? ms.bio, JSON.stringify(availability_slots ?? JSON.parse(ms.availability_slots || '[]')), ms.id);
+    .run(title ?? ms.title, expertise ?? ms.expertise, price_per_session ?? ms.price_per_session, meeting_link ?? ms.meeting_link, bio ?? ms.bio, JSON.stringify(newSlots), ms.id);
+  // Broadcast slot change so all clients update immediately
+  io.emit('mentor_slot_booked', { expertId: ms.user_id, sessionId: ms.id, slots: newSlots });
+  io.emit('experts_updated', { expertId: ms.user_id });
   res.json({ ok: true });
 });
 
 app.delete('/api/mentor-sessions/:id', auth, (req, res) => {
-  const ms = db.prepare(`SELECT id FROM mentor_sessions WHERE id=? AND user_id=?`).get(req.params.id, req.user.id);
+  const ms = db.prepare(`SELECT id, user_id FROM mentor_sessions WHERE id=? AND user_id=?`).get(req.params.id, req.user.id);
   if (!ms) return res.status(404).json({ error: 'Not found' });
   db.prepare(`UPDATE mentor_sessions SET is_active=0 WHERE id=?`).run(ms.id);
+  // Notify all clients to refresh experts list
+  io.emit('experts_updated', { expertId: ms.user_id });
   res.json({ ok: true });
 });
 
