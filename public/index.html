@@ -247,6 +247,26 @@ body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter
 
 /* SEARCH HIGHLIGHT */
 mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;padding:0 2px}
+
+/* REACTIONS */
+.react-wrap{position:relative;display:inline-block}
+.react-pop{position:fixed;background:var(--card);border:1px solid var(--border);border-radius:32px;padding:8px 12px;box-shadow:0 6px 28px rgba(0,0,0,.18);z-index:500;display:flex;gap:4px;animation:fadeIn .12s ease}
+.react-pop button{background:none;border:none;cursor:pointer;font-size:26px;padding:5px 7px;border-radius:50%;transition:transform .12s,background .12s;display:flex;flex-direction:column;align-items:center;line-height:1}
+.react-pop button:hover{transform:scale(1.35)}
+.react-pop button span{font-size:9px;color:var(--sub);margin-top:2px;white-space:nowrap;display:block}
+.react-counts{display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:2px 20px 6px;min-height:24px}
+.react-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 8px;border-radius:12px;background:var(--indigo-light);font-size:12px;font-weight:600;color:var(--primary)}
+/* EMOJI PICKER */
+.emoji-pop{position:fixed;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:8px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:9998;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;min-width:210px}
+.emoji-pop button{background:none;border:none;cursor:pointer;font-size:22px;padding:5px;border-radius:6px;transition:background .1s;line-height:1}
+.emoji-pop button:hover{background:var(--indigo-light)}
+/* FLAG BUTTON */
+.flag-btn{background:none;border:none;cursor:pointer;color:var(--sub);font-size:12px;padding:5px 8px;border-radius:6px;transition:.12s;opacity:0;flex-shrink:0}
+.post-hdr:hover .flag-btn{opacity:1}
+.flag-btn:hover{color:#ef4444;background:#fef2f2}
+/* ACCOUNT WARNING TOAST */
+.acct-warn{position:fixed;top:70px;right:16px;background:#fffbeb;border:1.5px solid #f59e0b;border-radius:var(--r);padding:14px 18px;max-width:340px;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.15);animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -471,10 +491,11 @@ function initSocket() {
 
   // ── REAL-TIME FEED EVENTS ──────────────────────────────────────────────────
   socket.on('new_post', p => {
-    // Prepend to feed if user is on home page; skip own posts (already inserted locally)
     if (curPage !== 'home') return;
+    // Dedup: if this is our own recently submitted post, skip (already added locally)
+    if (window._myRecentPosts?.has(p.id)) { window._myRecentPosts.delete(p.id); return; }
     const feed = document.getElementById('feed'); if (!feed) return;
-    if (feed.querySelector('#pc-' + p.id)) return; // already in DOM
+    if (feed.querySelector('#pc-' + p.id)) return; // already in DOM (race-condition guard)
     const div = document.createElement('div');
     div.innerHTML = renderPost(p);
     feed.insertBefore(div.firstElementChild, feed.firstChild);
@@ -524,6 +545,50 @@ function initSocket() {
     const total = slots.length;
     const el = card.querySelector('.slot-count');
     if (el) { el.textContent = `${free} of ${total} slots available`; el.style.color = free ? '#22c55e' : '#ef4444'; }
+  });
+
+  socket.on('post_reacted', ({ postId, reactions, my_reaction_by }) => {
+    // Update reaction chips for all viewers (the reactor's button was already updated via API)
+    const rc = document.querySelector('#pc-' + postId + ' .react-counts');
+    if (rc) rc.innerHTML = _renderRxCounts(reactions);
+    // If the reactor is me, also update the button state (confirmation)
+    if (my_reaction_by === me?.id) {
+      // already handled by reactPost() → _updateReact()
+    }
+  });
+
+  socket.on('account_action', ({ type, message, until }) => {
+    if (type === 'disabled') {
+      showModal(`<div style="text-align:center;padding:16px 0">
+        <i class="fas fa-ban" style="font-size:48px;color:#ef4444;margin-bottom:12px;display:block"></i>
+        <h2 style="color:#ef4444;margin-bottom:8px">Account Disabled</h2>
+        <p style="color:var(--sub);font-size:14px;line-height:1.5">${escHtml(message)}</p>
+        <p style="color:var(--sub);font-size:12px;margin-top:8px">You will be signed out in a few seconds.</p>
+      </div>`);
+      setTimeout(logout, 4000);
+    } else if (type === 'blocked') {
+      showModal(`<div style="text-align:center;padding:16px 0">
+        <i class="fas fa-clock" style="font-size:48px;color:#f59e0b;margin-bottom:12px;display:block"></i>
+        <h2 style="color:#f59e0b;margin-bottom:8px">Account Suspended</h2>
+        <p style="color:var(--sub);font-size:14px;line-height:1.5">${escHtml(message)}</p>
+        ${until ? `<p style="font-size:12px;color:var(--sub);margin-top:8px">Until: ${new Date(until).toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>` : ''}
+        <p style="font-size:12px;color:var(--sub);margin-top:4px">You will be signed out now.</p>
+      </div>`);
+      setTimeout(logout, 5000);
+    } else if (type === 'warning') {
+      const w = document.createElement('div');
+      w.className = 'acct-warn';
+      w.innerHTML = `<div style="display:flex;gap:10px;align-items:flex-start">
+        <i class="fas fa-exclamation-triangle" style="color:#f59e0b;font-size:18px;flex-shrink:0;margin-top:2px"></i>
+        <div style="flex:1">
+          <strong style="font-size:13px;color:#92400e;display:block;margin-bottom:4px">⚠️ Content Warning</strong>
+          <p style="font-size:12px;color:#78350f;margin:0;line-height:1.5">${escHtml(message)}</p>
+        </div>
+        <button onclick="this.closest('.acct-warn').remove()" style="background:none;border:none;cursor:pointer;color:#78350f;font-size:18px;line-height:1;flex-shrink:0">×</button>
+      </div>`;
+      document.body.appendChild(w);
+      setTimeout(() => w.remove(), 9000);
+    }
   });
 
   socket.on('poll_voted', ({ postId, options }) => {
@@ -816,6 +881,7 @@ function renderComposer() {
     <button class="cbtn" id="cb-photo" onclick="tmode('photo')"><i class="fas fa-image" style="color:#3b82f6"></i> Photo</button>
     <button class="cbtn" id="cb-poll" onclick="tmode('poll')"><i class="fas fa-chart-bar" style="color:#8b5cf6"></i> Poll</button>
     <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i> Schedule</button>
+    <button class="cbtn" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊 Emoji</button>
     <label class="anon-lbl"><input type="checkbox" id="anonchk"> Anonymous</label>
     <button class="btn btn-p btn-sm" style="margin-left:8px" onclick="submitPost()">Post</button>
   </div>`;
@@ -839,6 +905,9 @@ async function submitPost() {
   const body = { content: txt, is_anonymous: isAnon ? 1 : 0, image_url: imgUrl, is_poll: isPoll, poll_options: isPoll ? opts : [], scheduled_at: sched };
   const res = await api('/api/posts', { method: 'POST', body: JSON.stringify(body) });
   if (res.error) { toast('Error: ' + res.error); return; }
+  // Track ID so socket new_post broadcast doesn't duplicate it
+  window._myRecentPosts = window._myRecentPosts || new Set();
+  if (res.id) window._myRecentPosts.add(res.id);
   cmode = ''; document.getElementById('ptxt').value = ''; document.getElementById('cext').innerHTML = ''; document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('on')); document.getElementById('anonchk').checked = false;
   if (!sched) {
     postsData.unshift(res);
@@ -849,13 +918,22 @@ async function submitPost() {
 }
 
 // ── FEED ──────────────────────────────────────────────────────────────────
+const _RX = { like:'👍', love:'❤️', insightful:'💡', celebrate:'🎉', support:'🤝' };
+function _renderRxCounts(reactions) {
+  if (!reactions || !reactions.length) return '';
+  const total = reactions.reduce((s, r) => s + (r.count || 0), 0);
+  if (!total) return '';
+  const top = [...reactions].sort((a, b) => b.count - a.count).slice(0, 3);
+  return top.map(r => `<span class="react-chip">${_RX[r.reaction_type] || ''}${r.count}</span>`).join('') +
+    `<span style="font-size:12px;color:var(--sub);margin-left:2px">${total}</span>`;
+}
 function renderFeed(ps) {
   const el = document.getElementById('feed'); if (!el) return;
   if (!ps.length) { el.innerHTML = ''; return; }
   el.innerHTML = ps.map(renderPost).join('');
 }
 function renderPost(p) {
-  const mine = p.author_id === me?.id;
+  const mine = p.is_mine || p.author_id === me?.id;
   let pollHtml = '';
   if (p.poll_options?.length) {
     const tot = p.poll_options.reduce((s, o) => s + (o.votes_count || 0), 0);
@@ -863,18 +941,27 @@ function renderPost(p) {
       const pct = tot ? Math.round(o.votes_count / tot * 100) : 0;
       const label = o.option_text || o.text || '';
       return p.user_vote
-        ? `<div class="poll-opt"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${label}</span><strong>${pct}%</strong></div><div class="poll-bg"><div class="poll-bar" style="width:${pct}%"></div></div></div>`
-        : `<button class="poll-btn${p.user_vote === o.id ? ' voted' : ''}" onclick="votePoll(${p.id},${o.id})">${label}</button>`;
+        ? `<div class="poll-opt"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${escHtml(label)}</span><strong>${pct}%</strong></div><div class="poll-bg"><div class="poll-bar" style="width:${pct}%"></div></div></div>`
+        : `<button class="poll-btn${p.user_vote === o.id ? ' voted' : ''}" onclick="votePoll(${p.id},${o.id})">${escHtml(label)}</button>`;
     }).join('')}${tot ? `<p style="font-size:11px;color:var(--sub);margin-top:8px">${tot} vote${tot !== 1 ? 's' : ''}</p>` : ''}</div>`;
   }
-  const isLiked = p.liked || p.user_liked;
-  return `<div class="card post" id="pc-${p.id}">
-    <div class="post-hdr">${p.is_anonymous ? `<div class="av av40" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;border-radius:50%">?</div>` : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge">Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${p.author_name || 'Nexus Member'}</a>`}</h4><p>${p.author_headline || ''} &bull; ${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>${mine ? `<div style="margin-left:auto;display:flex;gap:4px"><button onclick="editPost(${p.id},'${(p.content||'').replace(/'/g,'&apos;').replace(/\n/g,'\\n')}')" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delPost(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Delete"><i class="fas fa-trash"></i></button></div>` : ''}</div>
-    <div class="post-body">${p.content}</div>
+  const myReact = p.my_reaction;
+  const reactCountsHtml = `<div class="react-counts">${_renderRxCounts(p.reactions || [])}</div>`;
+  const anonAv = `<div class="av av40" style="background:linear-gradient(135deg,#1f2937,#4b5563);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%" title="Anonymous"><i class="fas fa-user-secret" style="color:rgba(255,255,255,.9);font-size:20px"></i></div>`;
+  const safeContent = (p.content||'').replace(/\\/g,'\\\\').replace(/'/g,'&apos;').replace(/\n/g,'\\n');
+    <div class="post-hdr">${p.is_anonymous ? anonAv : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge"><i class="fas fa-user-secret" style="margin-right:4px;font-size:10px"></i>Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${escHtml(p.author_name || 'Nexus Member')}</a>`}</h4><p>${escHtml(p.author_headline || '')}${p.author_headline ? ' &bull; ' : ''}${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>
+    <div style="margin-left:auto;display:flex;gap:2px;align-items:center">
+      ${!mine ? `<button class="flag-btn" onclick="flagContent('post',${p.id})" title="Report"><i class="fas fa-flag"></i></button>` : ''}
+      ${mine ? `<button onclick="editPost(${p.id},'${safeContent}')" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delPost(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
+    </div></div>
+    <div class="post-body">${escHtml(p.content)}</div>
     ${p.image_url ? `<img src="${p.image_url}" class="post-img" loading="lazy">` : ''}
     ${pollHtml}
+    ${reactCountsHtml}
     <div class="post-acts">
-      <button class="pact${isLiked ? ' liked' : ''}" onclick="likePost(${p.id},this)"><i class="fa${isLiked ? 's' : 'r'} fa-heart"></i> ${p.likes_count || 0}</button>
+      <div class="react-wrap" id="rw-${p.id}">
+        <button class="pact react-btn${myReact ? ' liked' : ''}" onmouseenter="showReactPop(${p.id},this)" onmouseleave="startHideReactPop(${p.id})" onclick="reactPost(${p.id},'like')">${myReact ? `${_RX[myReact]} ${myReact[0].toUpperCase()+myReact.slice(1)}` : '👍 Like'}</button>
+      </div>
       <button class="pact" onclick="toggleComs(${p.id})"><i class="far fa-comment"></i> ${p.comments_count || 0}</button>
       <button class="pact" onclick="sharePost(${p.id})"><i class="fas fa-share-nodes"></i> Share</button>
     </div>
@@ -963,6 +1050,94 @@ async function _doEditPost(id) {
   toast('Post updated');
 }
 function sharePost(id) { const url = window.location.origin + '?post=' + id; navigator.clipboard?.writeText(url).then(() => toast('Link copied!')).catch(() => toast('Share: ' + url)); }
+
+// ── REACTIONS ─────────────────────────────────────────────────────────────
+let _rxTimers = {}, _rxPop = null;
+function showReactPop(id, btn) {
+  clearTimeout(_rxTimers[id]);
+  // Remove any existing popup
+  if (_rxPop && _rxPop.dataset.pid != id) { _rxPop.remove(); _rxPop = null; }
+  if (_rxPop) return;
+  const pop = document.createElement('div');
+  pop.className = 'react-pop'; pop.dataset.pid = id;
+  pop.innerHTML = Object.entries(_RX).map(([k, v]) =>
+    `<button onclick="reactPost(${id},'${k}')" title="${k[0].toUpperCase()+k.slice(1)}">${v}<span>${k[0].toUpperCase()+k.slice(1)}</span></button>`
+  ).join('');
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = (rect.top - 10 - 80) + 'px';
+  pop.style.left = rect.left + 'px';
+  pop.addEventListener('mouseenter', () => clearTimeout(_rxTimers[id]));
+  pop.addEventListener('mouseleave', () => startHideReactPop(id));
+  document.body.appendChild(pop);
+  _rxPop = pop;
+}
+function startHideReactPop(id) {
+  _rxTimers[id] = setTimeout(() => {
+    if (_rxPop && _rxPop.dataset.pid == id) { _rxPop.remove(); _rxPop = null; }
+  }, 350);
+}
+async function reactPost(id, reaction) {
+  if (_rxPop) { _rxPop.remove(); _rxPop = null; }
+  const r = await api('/api/posts/' + id + '/react', { method: 'POST', body: JSON.stringify({ reaction }) });
+  if (r.error) { toast(r.error); return; }
+  _updateReact(id, r.reactions, r.my_reaction);
+}
+function _updateReact(postId, reactions, myReact) {
+  const card = document.getElementById('pc-' + postId); if (!card) return;
+  // Update button label
+  const rBtn = card.querySelector('.react-btn');
+  if (rBtn) {
+    rBtn.className = 'pact react-btn' + (myReact ? ' liked' : '');
+    rBtn.innerHTML = myReact ? `${_RX[myReact]} ${myReact[0].toUpperCase()+myReact.slice(1)}` : '👍 Like';
+  }
+  // Update aggregated counts
+  const rc = card.querySelector('.react-counts');
+  if (rc) rc.innerHTML = _renderRxCounts(reactions);
+}
+
+// ── FLAG / REPORT ─────────────────────────────────────────────────────────
+function flagContent(type, id) {
+  const reasons = ['Harassment or bullying', 'Hate speech or discrimination', 'Spam or misleading', 'Inappropriate content', 'Abusive language', 'Other'];
+  showModal(`<h2 style="margin-bottom:6px"><i class="fas fa-flag" style="color:#ef4444;margin-right:8px"></i>Report Content</h2>
+    <p style="color:var(--sub);font-size:13px;margin-bottom:16px">Help keep Nexus safe and professional. Select a reason:</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${reasons.map(r => `<button class="btn btn-o" style="justify-content:flex-start;text-align:left;padding:10px 16px" onclick="_submitFlag('${type}',${id},'${r}')"><i class="fas fa-chevron-right" style="font-size:10px;color:var(--sub);margin-right:8px"></i>${r}</button>`).join('')}
+    </div>
+    <button class="btn btn-g" style="width:100%;justify-content:center;margin-top:12px" onclick="closeModal()">Cancel</button>`);
+}
+async function _submitFlag(type, id, reason) {
+  const r = await api('/api/flag', { method: 'POST', body: JSON.stringify({ content_type: type, content_id: id, reason }) });
+  closeModal();
+  if (r.error) { toast('Error: ' + r.error); return; }
+  toast('Reported. Thank you for helping keep Nexus safe. 🛡️');
+}
+
+// ── EMOJI PICKER ──────────────────────────────────────────────────────────
+const _EMOJIS = ['😊','😄','😎','🤔','👍','👋','🙏','❤️','🔥','💡','🚀','✅','💪','🎉','🤝','📌','📊','💼','🌟','⭐','🎯','📈','🏆','💰','🔗','📝','😂','🥳','🤩','🏅','👏','💬','🎓','🤓','😅'];
+let _emojiPopEl = null;
+function openEmojiPicker(targetId, btn) {
+  if (_emojiPopEl) { _emojiPopEl.remove(); _emojiPopEl = null; return; }
+  const pop = document.createElement('div');
+  pop.className = 'emoji-pop'; pop.id = 'epop';
+  pop.innerHTML = _EMOJIS.map(e => `<button onclick="insertEmoji('${targetId}','${e}')">${e}</button>`).join('');
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = Math.max(8, rect.top - 220) + 'px';
+  pop.style.left = rect.left + 'px';
+  document.body.appendChild(pop);
+  _emojiPopEl = pop;
+  setTimeout(() => document.addEventListener('click', function _ec(e) {
+    if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); _emojiPopEl = null; document.removeEventListener('click', _ec); }
+  }), 10);
+}
+function insertEmoji(targetId, emoji) {
+  const inp = document.getElementById(targetId); if (!inp) return;
+  const s = inp.selectionStart ?? inp.value.length;
+  const e = inp.selectionEnd ?? s;
+  inp.value = inp.value.substring(0, s) + emoji + inp.value.substring(e);
+  inp.selectionStart = inp.selectionEnd = s + emoji.length;
+  inp.focus();
+  if (_emojiPopEl) { _emojiPopEl.remove(); _emojiPopEl = null; }
+}
 
 // ── PROFILE ───────────────────────────────────────────────────────────────
 async function renderProfile(uid) {
@@ -1113,349 +1288,4 @@ async function openChat(uid, name) {
   document.getElementById('mt-' + uid)?.classList.add('active');
   if (socket) { socket.emit('join_chat', uid); socket.emit('mark_read', { from: uid }); }
   updBadge('mbadge', 0); // clear badge when opening any conversation
-  const [info, msgs] = await Promise.all([
-    api('/api/users/' + uid).catch(() => ({ name: name || 'User' })),
-    api('/api/messages/' + uid)
-  ]);
-  const col = document.getElementById('ccol'); if (!col) return;
-  const isOnline = window._online?.has(String(uid));
-  const hl = info.headline || '';
-  col.innerHTML = `
-    <div id="ctop">
-      <div class="pres-wrap${isOnline?' online':''}" id="ctop-pres">${av(info,'av40')}<div class="pres-dot"></div></div>
-      <div><h3>${escHtml(info.name||name)}</h3><p id="ctop-sub" data-hl="${escHtml(hl)}">${isOnline?'Active now':hl}</p></div>
-      <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button>
-    </div>
-    <div id="cmsgs">${(Array.isArray(msgs)?msgs:[]).map(m=>{
-      const isMine = m.sender_id==me.id;
-      return `<div class="bub ${isMine?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot">${isMine?`<button class="edit-msg-btn" onclick="editMsg(${m.id},this)" title="Edit"><i class="fas fa-pen"></i></button>`:''}${m.is_edited?'<span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span>':''}<time>${timeAgo(m.created_at)}</time>${isMine?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`;
-    }).join('')}</div>
-    <div id="typind"><div class="tdots"><span></span><span></span><span></span></div><span id="tname">${escHtml(info.name||name)}</span> is typing…</div>
-    <div id="cinp"><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
-  const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
-  // Request presence for this user
-  if (socket) socket.emit('get_presence', { userId: uid });
-}
-let _typTimer;
-function emitTyp() {
-  if (!socket || !achat) return;
-  socket.emit('typing', { to: achat });
-  clearTimeout(_typTimer);
-  _typTimer = setTimeout(() => { if (socket && achat) socket.emit('stop_typing', { to: achat }); }, 2000);
-}
-async function sendMsg() {
-  const inp = document.getElementById('cinput');
-  const c = inp?.value.trim(); if (!c || !achat) return;
-  inp.value = '';
-  if (socket) { socket.emit('stop_typing', { to: achat }); clearTimeout(_typTimer); }
-  // Optimistic: show immediately before server confirms
-  const tempId = 'tmp-' + Date.now();
-  const mb = document.getElementById('cmsgs');
-  if (mb) {
-    const div = document.createElement('div');
-    div.className = 'bub mine'; div.setAttribute('data-mid', tempId);
-    div.innerHTML = `${escHtml(c)}<div class="bub-foot"><time>just now</time><span class="tick sent"><i class="fas fa-clock" style="font-size:9px;opacity:.7"></i></span></div>`;
-    mb.appendChild(div); mb.scrollTop = mb.scrollHeight;
-  }
-  const msg = await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
-  const tmpEl = mb?.querySelector('[data-mid="' + tempId + '"]');
-  if (msg && !msg.error) {
-    if (tmpEl) {
-      tmpEl.setAttribute('data-mid', msg.id);
-      const tick = tmpEl.querySelector('.tick');
-      if (tick) { tick.className = 'tick sent'; tick.innerHTML = '<i class="fas fa-check"></i>'; }
-    }
-  } else {
-    if (tmpEl) { tmpEl.style.opacity = '0.4'; const tick = tmpEl.querySelector('.tick'); if (tick) tick.innerHTML = '!'; }
-    toast('Failed to send'); inp.value = c;
-  }
-  refreshThreads();
-}
-
-function editMsg(id, btn) {
-  const bub = btn.closest('.bub'); if (!bub) return;
-  const currentText = bub.firstChild?.textContent?.trim() || '';
-  // Replace bubble content with inline editor
-  bub.innerHTML = `<div style="display:flex;gap:6px;align-items:center">
-    <input id="edit-msg-inp-${id}" value="${escHtml(currentText)}" style="flex:1;padding:6px 10px;border:1.5px solid rgba(255,255,255,.4);border-radius:8px;background:rgba(255,255,255,.15);color:#fff;font-size:13px" onkeydown="if(event.key==='Enter')_saveMsg(${id});if(event.key==='Escape')openChat(achat)">
-    <button onclick="_saveMsg(${id})" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;padding:5px 10px;cursor:pointer;color:#fff;font-size:12px"><i class="fas fa-check"></i></button>
-    <button onclick="openChat(achat)" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px"><i class="fas fa-times"></i></button>
-  </div>`;
-  document.getElementById('edit-msg-inp-' + id)?.focus();
-}
-async function _saveMsg(id) {
-  const inp = document.getElementById('edit-msg-inp-' + id);
-  const val = inp?.value?.trim(); if (!val) return;
-  const r = await api('/api/messages/' + id, { method: 'PATCH', body: JSON.stringify({ content: val }) });
-  if (r.error) { toast(r.error); return; }
-  // Socket will update both sides; update own bubble immediately too
-  const bub = document.querySelector('[data-mid="' + id + '"]');
-  if (bub) {
-    bub.innerHTML = `${escHtml(val)}<div class="bub-foot"><button class="edit-msg-btn" onclick="editMsg(${id},this)" title="Edit"><i class="fas fa-pen"></i></button><span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span><time>just now</time><span class="tick sent"><i class="fas fa-check"></i></span></div>`;
-  }
-}
-
-// ── NOTIFICATIONS ─────────────────────────────────────────────────────────
-async function renderNotifs() {
-  const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
-  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${x.content}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
-}
-
-// ── SALARY BOARD ──────────────────────────────────────────────────────────
-async function renderSalary() {
-  const d = await api('/api/salary');
-  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>💰 Salary Board</h1><button class="btn btn-p" onclick="showSalForm()"><i class="fas fa-plus"></i> Share Salary</button></div>
-    ${Array.isArray(d) && d.length ? d.map(s => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${s.role}</h3><p style="color:var(--sub);font-size:13px;margin:0">${s.company}${s.city ? ' · ' + s.city : ''}</p></div><div style="text-align:right"><p style="font-size:20px;font-weight:800;color:var(--primary);margin:0">₹${s.salary_lpa}L</p><p style="font-size:11px;color:var(--sub);margin:0">per annum</p></div></div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><span class="chip chip-p">${s.experience_years}y exp</span>${s.tech_stack ? `<span class="chip" style="background:var(--inp);color:var(--sub)">${s.tech_stack}</span>` : ''}${s.is_anonymous ? '<span class="chip" style="background:#f3f4f6;color:#6b7280">Anonymous</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-coins" style="font-size:40px"></i><p>No salaries shared yet — be the first!</p></div>'}
-  </div>`;
-}
-function showSalForm() {
-  showModal(`<h2 style="margin-bottom:16px">Share Your Salary</h2>
-    <div class="frow"><div class="fg"><label>Company *</label><input id="slco"></div><div class="fg"><label>Role *</label><input id="slro"></div></div>
-    <div class="frow"><div class="fg"><label>Salary (LPA) *</label><input id="slsa" type="number" placeholder="12.5"></div><div class="fg"><label>Experience (yrs)</label><input id="slexp" type="number" placeholder="3"></div></div>
-    <div class="frow"><div class="fg"><label>City</label><input id="slci" placeholder="Bangalore"></div><div class="fg"><label>Tech Stack</label><input id="slst" placeholder="React, Node"></div></div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px"><input type="checkbox" id="slan"> Share anonymously</label>
-    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveSal()"><i class="fas fa-share"></i> Share</button>`);
-}
-async function saveSal() {
-  const b = { company: document.getElementById('slco').value, role: document.getElementById('slro').value, salary_lpa: parseFloat(document.getElementById('slsa').value), experience_years: parseInt(document.getElementById('slexp').value) || 0, city: document.getElementById('slci').value, tech_stack: document.getElementById('slst').value, is_anonymous: document.getElementById('slan').checked };
-  if (!b.company || !b.role || !b.salary_lpa) { toast('Required fields missing'); return; }
-  await api('/api/salary', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Salary shared! 🙏'); renderSalary();
-}
-
-// ── REVIEWS ───────────────────────────────────────────────────────────────
-async function renderReviews() {
-  const d = await api('/api/reviews');
-  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>⭐ Company Reviews</h1><button class="btn btn-p" onclick="showRevForm()"><i class="fas fa-plus"></i> Write Review</button></div>
-    ${Array.isArray(d) && d.length ? d.map(r => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${r.company}</h3><p style="font-size:13px;color:var(--sub);margin:0">${r.title || ''}</p></div><div style="text-align:right"><div class="stars">${'★'.repeat(r.overall_rating)}${'☆'.repeat(5 - r.overall_rating)}</div><p style="font-size:12px;color:var(--sub);margin:4px 0 0">${r.is_anonymous ? 'Anonymous' : 'Verified'}</p></div></div>${r.pros ? `<div style="margin-top:12px"><p style="font-size:12px;color:#16a34a;font-weight:700;margin:0 0 3px">👍 Pros</p><p style="font-size:13px;margin:0">${r.pros}</p></div>` : ''}${r.cons ? `<div style="margin-top:8px"><p style="font-size:12px;color:#dc2626;font-weight:700;margin:0 0 3px">👎 Cons</p><p style="font-size:13px;margin:0">${r.cons}</p></div>` : ''}<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${r.work_life_balance ? `<span class="chip" style="background:var(--inp);color:var(--sub)">WLB: ${r.work_life_balance}/5</span>` : ''}${r.culture ? `<span class="chip" style="background:var(--inp);color:var(--sub)">Culture: ${r.culture}/5</span>` : ''}${r.would_recommend ? '<span class="chip" style="background:#dcfce7;color:#16a34a">Recommends</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-building" style="font-size:40px"></i><p>No reviews yet — share your experience!</p></div>'}
-  </div>`;
-}
-function showRevForm() {
-  showModal(`<h2 style="margin-bottom:16px">Write a Review</h2>
-    <div class="fg"><label>Company *</label><input id="rvco"></div>
-    <div class="fg"><label>Rating *</label><select id="rvrat"><option value="">Select…</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>
-    <div class="fg"><label>Title</label><input id="rvti" placeholder="e.g. Great place to grow"></div>
-    <div class="fg"><label>Pros</label><textarea id="rvpro" rows="2" placeholder="What's great about working here?"></textarea></div>
-    <div class="fg"><label>Cons</label><textarea id="rvcon" rows="2" placeholder="What could be better?"></textarea></div>
-    <div class="frow"><div class="fg"><label>Work-Life Balance /5</label><input id="rvwlb" type="number" min="1" max="5"></div><div class="fg"><label>Culture /5</label><input id="rvcul" type="number" min="1" max="5"></div></div>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px"><input type="checkbox" id="rvrec"> Would recommend</label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px"><input type="checkbox" id="rvan"> Anonymous</label>
-    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveRev()"><i class="fas fa-check"></i> Submit Review</button>`);
-}
-async function saveRev() {
-  const r = parseInt(document.getElementById('rvrat').value); if (!r) { toast('Select a rating'); return; }
-  const b = { company: document.getElementById('rvco').value, overall_rating: r, title: document.getElementById('rvti').value, pros: document.getElementById('rvpro').value, cons: document.getElementById('rvcon').value, work_life_balance: document.getElementById('rvwlb').value, culture: document.getElementById('rvcul').value, would_recommend: document.getElementById('rvrec').checked, is_anonymous: document.getElementById('rvan').checked };
-  if (!b.company) { toast('Company required'); return; }
-  await api('/api/reviews', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Review submitted! 🙏'); renderReviews();
-}
-
-// ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
-async function renderExperts() {
-  const d = await api('/api/experts');
-  const cards = Array.isArray(d) && d.length ? d.filter(e => e.user_id != me?.id).map(e => {
-    const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || '');
-    const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
-    const freeSlots = slots.filter(s => !s.booked).length;
-    const totalSlots = slots.length;
-    return `<div class="card" style="padding:20px;text-align:center" data-expert="${e.user_id}">
-      ${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}
-      <h4 style="margin:10px 0 2px;font-size:15px">${escHtml(e.name || 'Mentor')}</h4>
-      <p style="font-size:12px;color:var(--sub);margin:0 0 6px">${escHtml(e.headline || '')}</p>
-      <p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 4px">${escHtml(expertiseStr)}</p>
-      <p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 4px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub);font-size:12px">/session</span></p>
-      ${totalSlots ? `<p class="slot-count" style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p class="slot-count" style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
-      <button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name||'Mentor')}')"><i class="fas fa-video"></i> Book Session</button>
-    </div>`;
-  }).join('') : '<div class="card empty" style="text-align:center;padding:40px"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No other mentors yet</p></div>';
-  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
-    <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
-    <div class="sug-grid">${cards}</div>
-  </div>`;
-}
-
-async function bookSession(expertId, expertName) {
-  const experts = await api('/api/experts');
-  const e = Array.isArray(experts) ? experts.find(x => x.user_id == expertId) : null;
-  const slots = Array.isArray(e?.availability_slots) ? e.availability_slots : [];
-  if (!slots.length) {
-    showModal(`<h2 style="margin-bottom:12px">Book with ${escHtml(expertName)}</h2>
-      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:16px;margin-bottom:16px;font-size:13px">
-        <p style="margin:0 0 8px;font-weight:600"><i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i>Meeting Link</p>
-        ${e?.meeting_link ? `<a href="${e.meeting_link}" target="_blank" style="color:var(--primary);word-break:break-all">${e.meeting_link}</a>` : '<p style="margin:0;color:var(--sub)">No meeting link set yet</p>'}
-      </div>
-      <p style="color:var(--sub);font-size:13px;text-align:center">No time slots added yet. Contact the mentor directly.</p>
-      ${e?.meeting_link ? `<a href="${e.meeting_link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center;margin-top:8px"><i class="fas fa-external-link-alt"></i> Join Meeting Room</a>` : ''}
-    `);
-    return;
-  }
-  const slotRows = slots.map(s => {
-    const dt = new Date(s.key);
-    const label = dt.toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-    return s.booked
-      ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--inp);margin-bottom:8px;opacity:.5">
-           <span style="font-size:13px;text-decoration:line-through">${label}</span>
-           <span style="font-size:11px;color:#ef4444;font-weight:600">Booked</span>
-         </div>`
-      : `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1px solid var(--border);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${expertId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}')">
-           <span style="font-size:13px;font-weight:600">${label}</span>
-           <span class="btn btn-p btn-sm" style="pointer-events:none">Select</span>
-         </div>`;
-  }).join('');
-  showModal(`<h2 style="margin-bottom:4px">Book with ${escHtml(expertName)}</h2>
-    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Pick an available time slot below</p>
-    <div style="max-height:340px;overflow-y:auto">${slotRows}</div>`);
-}
-
-async function confirmBookSlot(expertId, slotKey, expertName, meetingLink) {
-  const r = await api(`/api/experts/${expertId}/book-slot`, { method:'POST', body: JSON.stringify({ slotKey }) });
-  if (r.error) { toast('Error: ' + r.error); return; }
-  closeModal();
-  const link = r.meeting_link || meetingLink;
-  if (link) {
-    showModal(`<div style="text-align:center;padding:12px 0">
-      <div style="font-size:48px;margin-bottom:12px">🎉</div>
-      <h2 style="margin-bottom:8px">Session Booked!</h2>
-      <p style="font-size:13px;color:var(--sub);margin-bottom:20px">You're booked with ${escHtml(expertName)}. Join using the link below.</p>
-      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:14px;margin-bottom:16px;word-break:break-all;font-size:13px">
-        <i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i><a href="${link}" target="_blank" style="color:var(--primary)">${link}</a>
-      </div>
-      <a href="${link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center"><i class="fas fa-external-link-alt"></i> Join Meeting Now</a>
-    </div>`);
-  } else {
-    toast('Session booked! 🎉 The mentor will share a meeting link.');
-    renderExperts();
-  }
-}
-
-async function showExpertForm() {
-  const existing = await api('/api/experts/me');
-  const slots = Array.isArray(existing?.availability_slots) ? existing.availability_slots : [];
-  const slotsJson = JSON.stringify(slots);
-  showModal(`<h2 style="margin-bottom:16px">Offer Mentoring</h2>
-    <div class="fg"><label>Expertise <span style="color:var(--sub);font-size:11px">(comma separated)</span></label>
-      <input id="exex" placeholder="e.g. System Design, React, DSA" value="${escHtml((existing?.expertise||[]).join(', '))}"></div>
-    <div class="fg"><label>Price per session (₹)</label>
-      <input id="expr" type="number" placeholder="500" value="${existing?.price_per_session||''}"></div>
-    <div class="fg"><label>Meeting Link <span style="color:var(--sub);font-size:11px">(Zoom / Google Meet / Teams)</span></label>
-      <input id="exlink" type="url" placeholder="https://zoom.us/j/..." value="${escHtml(existing?.meeting_link||'')}"></div>
-    <div class="fg"><label>Bio / Description</label>
-      <textarea id="exbi" rows="2">${escHtml(existing?.bio||'')}</textarea></div>
-    <div class="fg"><label>Availability Slots <span style="color:var(--sub);font-size:11px">(add your open times)</span></label>
-      <div id="slotlist" style="margin-bottom:8px">${slots.map(s=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)">
-        <span style="flex:1">${new Date(s.key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
-        ${s.booked?'<span style="font-size:11px;color:#ef4444">Booked</span>':'<button type="button" onclick="removeSlot(\''+s.key+'\')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>'}
-      </div>`).join('')}</div>
-      <div style="display:flex;gap:8px">
-        <input type="datetime-local" id="exslot" style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px">
-        <button type="button" class="btn btn-o btn-sm" onclick="addSlot()"><i class="fas fa-plus"></i> Add</button>
-      </div>
-    </div>
-    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveExpert()"><i class="fas fa-check"></i> Save Profile</button>
-    <script>window._exSlots=${slotsJson};<\/script>`);
-}
-function addSlot() {
-  const val = document.getElementById('exslot')?.value; if (!val) { toast('Pick a date and time'); return; }
-  window._exSlots = window._exSlots || [];
-  const key = new Date(val).toISOString();
-  if (window._exSlots.find(s=>s.key===key)) { toast('Slot already added'); return; }
-  window._exSlots.push({ key, booked: false });
-  document.getElementById('exslot').value = '';
-  const list = document.getElementById('slotlist');
-  if (list) {
-    const div = document.createElement('div');
-    div.setAttribute('data-slot', key);
-    div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)';
-    div.innerHTML = `<span style="flex:1">${new Date(key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><button type="button" onclick="removeSlot('${key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>`;
-    list.appendChild(div);
-  }
-}
-function removeSlot(key) {
-  window._exSlots = (window._exSlots||[]).filter(s=>s.key!==key);
-  document.querySelector('[data-slot="'+key+'"]')?.remove();
-}
-async function saveExpert() {
-  const expertise = document.getElementById('exex')?.value||'';
-  const price_per_session = parseInt(document.getElementById('expr')?.value)||500;
-  const meeting_link = document.getElementById('exlink')?.value||'';
-  const bio = document.getElementById('exbi')?.value||'';
-  if (!expertise) { toast('Expertise required'); return; }
-  if (meeting_link && !meeting_link.startsWith('http')) { toast('Meeting link must start with http'); return; }
-  await api('/api/experts/me', { method:'POST', body: JSON.stringify({ expertise: expertise.split(',').map(s=>s.trim()).filter(Boolean), price_per_session, meeting_link, bio, availability_slots: window._exSlots||[] }) });
-  closeModal(); toast('Profile saved! 🎓'); renderExperts();
-}
-
-// ── JOBS ──────────────────────────────────────────────────────────────────
-async function renderJobs() {
-  const j = await api('/api/jobs');
-  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto"><div class="phdr"><h1>💼 Jobs</h1><button class="btn btn-p" onclick="showPostJob()"><i class="fas fa-plus"></i> Post Job</button></div>
-    <div class="card cb" style="margin-bottom:16px"><div class="frow2"><input id="jq" placeholder="Search jobs, companies…" oninput="filJobs()"><select id="jt" onchange="filJobs()"><option value="">All types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
-    <div id="jlist">${rJobList(Array.isArray(j) ? j : [])}</div>`;
-  window._jd = Array.isArray(j) ? j : [];
-}
-function rJobList(d) {
-  if (!d.length) return '<div class="card empty"><i class="fas fa-briefcase" style="font-size:40px"></i><p>No jobs found</p></div>';
-  return d.map(j => `<div class="card"><div class="ji"><div class="fb" style="margin-bottom:8px"><div><h3>${j.title}</h3><p class="jco">${j.company}</p></div>${j.poster_avatar ? `<img src="${j.poster_avatar}" class="av av48" style="object-fit:cover;border-radius:50%">` : av({ name: j.poster_name }, 'av48')}</div><div class="jmeta"><span><i class="fas fa-location-dot"></i>${j.location || 'Not specified'}</span><span><i class="fas fa-clock"></i>${j.job_type}</span>${j.salary_range ? `<span><i class="fas fa-indian-rupee-sign"></i>${j.salary_range}</span>` : ''}<span><i class="fas fa-users"></i>${j.applications_count} applicants</span><span><i class="fas fa-calendar"></i>${timeAgo(j.created_at)}</span></div>${j.description ? `<p class="jdesc">${j.description.slice(0, 200)}${j.description.length > 200 ? '…' : ''}</p>` : ''}<div style="display:flex;gap:8px;margin-top:12px">${j.applied ? '<button class="btn btn-g btn-sm" disabled><i class="fas fa-check"></i> Applied</button>' : `<button class="btn btn-p btn-sm" onclick="showApply(${j.id},'${j.title.replace(/'/g, '&apos;')}')"><i class="fas fa-paper-plane"></i> Easy Apply</button>`}<button class="btn btn-o btn-sm" onclick="this.innerHTML='<i class=&quot;fas fa-bookmark&quot;></i> Saved';toast('Saved!')"><i class="far fa-bookmark"></i> Save</button></div></div></div>`).join('');
-}
-function filJobs() { const q = document.getElementById('jq').value.toLowerCase(); const t = document.getElementById('jt').value; document.getElementById('jlist').innerHTML = rJobList((window._jd || []).filter(j => (!q || (j.title + j.company + (j.description || '')).toLowerCase().includes(q)) && (!t || j.job_type === t))); }
-function showApply(id, title) {
-  showModal(`<h2 style="margin-bottom:16px">Apply: ${title}</h2><div class="fg"><label>Cover Letter (optional)</label><textarea id="cltxt" rows="5" placeholder="Why are you a great fit?"></textarea></div><button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="applyJob(${id})"><i class="fas fa-paper-plane"></i> Submit Application</button>`);
-}
-async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } closeModal(); toast('Applied! 🎉'); renderJobs(); }
-function showPostJob() {
-  showModal(`<h2 style="margin-bottom:16px">Post a Job</h2>
-    <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Engineer"></div><div class="fg"><label>Company *</label><input id="pjco" placeholder="Company name"></div></div>
-    <div class="frow"><div class="fg"><label>Location</label><input id="pjlo" placeholder="City or Remote"></div><div class="fg"><label>Type</label><select id="pjty"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
-    <div class="fg"><label>Salary Range</label><input id="pjsa" placeholder="12-18 LPA"></div>
-    <div class="fg"><label>Description</label><textarea id="pjde" rows="4" placeholder="Describe the role…"></textarea></div>
-    <div class="fg"><label>Requirements</label><textarea id="pjre" rows="3" placeholder="Skills and qualifications…"></textarea></div>
-    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveJob()"><i class="fas fa-check"></i> Post Job</button>`);
-}
-async function saveJob() {
-  const b = { title: document.getElementById('pjti').value, company: document.getElementById('pjco').value, location: document.getElementById('pjlo').value, job_type: document.getElementById('pjty').value, salary_range: document.getElementById('pjsa').value, description: document.getElementById('pjde').value, requirements: document.getElementById('pjre').value };
-  if (!b.title || !b.company) { toast('Title and company required'); return; }
-  await api('/api/jobs', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Job posted!'); renderJobs();
-}
-
-// ── BOOT ──────────────────────────────────────────────────────────────────
-(async () => {
-  // Restore dark mode immediately from localStorage (prevents flash)
-  if (localStorage.getItem('nxdark') === '1') document.body.classList.add('dark');
-  // Handle password reset link (?reset=TOKEN)
-  const resetToken = new URLSearchParams(window.location.search).get('reset');
-  if (resetToken) {
-    const check = await api('/api/auth/reset-password/' + resetToken);
-    document.getElementById('awrap').style.display = 'flex';
-    document.getElementById('appw').style.display = 'none';
-    if (check.valid) {
-      renderAF('reset', resetToken);
-    } else {
-      renderAF('login');
-      document.getElementById('aerr').innerHTML = '<p style="color:#ef4444;font-size:13px">Reset link expired. Request a new one.</p>';
-    }
-    history.replaceState({}, '', '/'); // clean URL
-    return;
-  }
-  const saved = localStorage.getItem('nxtoken');
-  if (saved) {
-    token = saved;
-    try {
-      me = await api('/api/users/me');
-      if (me && me.id) {
-        document.getElementById('awrap').style.display = 'none';
-        document.getElementById('appw').style.display = 'flex';
-        if (me.is_dark_mode) document.body.classList.add('dark');
-        clearInterval(window._badgeTimer);
-        initSocket(); go('home'); pollBadges(); window._badgeTimer = setInterval(pollBadges, 30000);
-  // Update Me button avatar immediately after login
-  const avEl = document.getElementById('me-av-sm');
-  if (avEl && me) {
-    avEl.outerHTML = me.avatar_url
-      ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
-      : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
-  }
-      } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
-    } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
-  } else { showAuth(); }
-})();
-</script>
-</body>
-</html>
+  const [info, msgs] = await Promise.al

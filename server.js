@@ -115,6 +115,9 @@ const auth = (req, res, next) => {
   if (!token) return res.status(401).json({ error: 'No token' });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
+    const u = db.prepare(`SELECT is_disabled, blocked_until FROM users WHERE id=?`).get(req.user.id);
+    if (u?.is_disabled) return res.status(403).json({ error: 'Account disabled', code: 'DISABLED' });
+    if (u?.blocked_until && new Date(u.blocked_until) > new Date()) return res.status(403).json({ error: 'Account suspended until ' + u.blocked_until, code: 'BLOCKED', until: u.blocked_until });
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
@@ -352,12 +355,17 @@ app.get('/api/posts', auth, (req, res) => {
   `).all(...feedParams);
 
   const result = posts.map(p => {
-    const post = { ...p };
+    const post = { ...p, is_mine: p.author_id === req.user.id };
     if (p.is_poll) {
       post.poll_options = db.prepare(`SELECT * FROM poll_options WHERE post_id=?`).all(p.id);
       const vote = db.prepare(`SELECT option_id FROM poll_votes WHERE post_id=? AND user_id=?`).get(p.id, req.user.id);
       post.user_vote = vote?.option_id || null;
     }
+    // Reactions
+    post.reactions = db.prepare(`SELECT reaction_type, COUNT(*) as count FROM post_reactions WHERE post_id=? GROUP BY reaction_type`).all(p.id);
+    post.my_reaction = db.prepare(`SELECT reaction_type FROM post_reactions WHERE post_id=? AND user_id=?`).get(p.id, req.user.id)?.reaction_type || null;
+    // Strip author_id from anonymous posts for others
+    if (p.is_anonymous && p.author_id !== req.user.id) post.author_id = null;
     post.top_comments = db.prepare(`
       SELECT c.*, u.name as author_name, u.avatar_url as author_avatar
       FROM comments c JOIN users u ON c.author_id=u.id
@@ -392,9 +400,10 @@ app.post('/api/posts', auth, (req, res) => {
   if (is_poll && poll_options?.length) {
     newPost.poll_options = db.prepare(`SELECT * FROM poll_options WHERE post_id=?`).all(info.lastInsertRowid);
   }
+  if (newPost) { newPost.is_mine = true; newPost.reactions = []; newPost.my_reaction = null; }
   res.json(newPost || { id: info.lastInsertRowid });
-  // Broadcast new post to all connected users in real-time
-  if (newPost && isPublished) io.emit('new_post', newPost);
+  // Broadcast new post — strip is_mine so receivers don't think it's theirs
+  if (newPost && isPublished) io.emit('new_post', { ...newPost, is_mine: false });
 });
 
 app.delete('/api/posts/:id', auth, (req, res) => {
@@ -436,6 +445,65 @@ function toggleLike(req, res) {
 }
 app.post('/api/posts/:id/like', auth, toggleLike);
 app.delete('/api/posts/:id/like', auth, toggleLike);
+
+// ── REACTIONS ────────────────────────────────────────────────────────────────
+const VALID_REACTIONS = ['like','love','insightful','celebrate','support'];
+app.post('/api/posts/:id/react', auth, (req, res) => {
+  const { reaction } = req.body;
+  if (!VALID_REACTIONS.includes(reaction)) return res.status(400).json({ error: 'Invalid reaction' });
+  const postId = req.params.id;
+  const existing = db.prepare(`SELECT reaction_type FROM post_reactions WHERE post_id=? AND user_id=?`).get(postId, req.user.id);
+  if (existing) {
+    if (existing.reaction_type === reaction) {
+      db.prepare(`DELETE FROM post_reactions WHERE post_id=? AND user_id=?`).run(postId, req.user.id);
+    } else {
+      db.prepare(`UPDATE post_reactions SET reaction_type=? WHERE post_id=? AND user_id=?`).run(reaction, postId, req.user.id);
+    }
+  } else {
+    db.prepare(`INSERT INTO post_reactions (post_id, user_id, reaction_type) VALUES (?,?,?)`).run(postId, req.user.id, reaction);
+  }
+  const reactions = db.prepare(`SELECT reaction_type, COUNT(*) as count FROM post_reactions WHERE post_id=? GROUP BY reaction_type`).all(postId);
+  const my_reaction = db.prepare(`SELECT reaction_type FROM post_reactions WHERE post_id=? AND user_id=?`).get(postId, req.user.id)?.reaction_type || null;
+  io.emit('post_reacted', { postId: Number(postId), reactions, my_reaction_by: req.user.id, my_reaction });
+  res.json({ reactions, my_reaction });
+});
+
+// ── CONTENT FLAGS / MODERATION ────────────────────────────────────────────────
+app.post('/api/flag', auth, (req, res) => {
+  const { content_type, content_id, reason } = req.body; // content_type: 'post'|'message'|'comment'
+  if (!content_type || !content_id) return res.status(400).json({ error: 'Missing fields' });
+  try {
+    db.prepare(`INSERT INTO content_flags (content_type, content_id, reporter_id, reason) VALUES (?,?,?,?)`).run(content_type, content_id, req.user.id, reason || 'inappropriate');
+  } catch { return res.json({ ok: true }); } // ignore duplicate flag
+  // Count flags on this content item
+  const flagCount = db.prepare(`SELECT COUNT(*) as n FROM content_flags WHERE content_type=? AND content_id=?`).get(content_type, content_id)?.n || 0;
+  if (flagCount >= 3) {
+    // Find who authored this content
+    let authorId = null;
+    if (content_type === 'post') { const p = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(content_id); authorId = p?.author_id; }
+    else if (content_type === 'message') { const m = db.prepare(`SELECT sender_id FROM messages WHERE id=?`).get(content_id); authorId = m?.sender_id; }
+    else if (content_type === 'comment') { const c = db.prepare(`SELECT author_id FROM comments WHERE id=?`).get(content_id); authorId = c?.author_id; }
+    if (authorId && authorId !== req.user.id) {
+      const warningCount = db.prepare(`SELECT warnings FROM users WHERE id=?`).get(authorId)?.warnings || 0;
+      const newWarnings = warningCount + 1;
+      if (newWarnings >= 5) {
+        // Permanent disable
+        db.prepare(`UPDATE users SET is_disabled=1 WHERE id=?`).run(authorId);
+        io.to(`user_${authorId}`).emit('account_action', { type: 'disabled', message: 'Your account has been permanently disabled due to repeated violations.' });
+      } else if (newWarnings >= 3) {
+        // 24h block
+        const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        db.prepare(`UPDATE users SET blocked_until=?, warnings=? WHERE id=?`).run(until, newWarnings, authorId);
+        io.to(`user_${authorId}`).emit('account_action', { type: 'blocked', until, message: `Your account has been suspended for 24 hours due to policy violations. (Warning ${newWarnings}/5)` });
+      } else {
+        // Warning
+        db.prepare(`UPDATE users SET warnings=? WHERE id=?`).run(newWarnings, authorId);
+        io.to(`user_${authorId}`).emit('account_action', { type: 'warning', message: `Warning ${newWarnings}/5: Content you posted was flagged as inappropriate. Repeated violations will result in suspension.` });
+      }
+    }
+  }
+  res.json({ ok: true });
+});
 
 app.post('/api/posts/:id/comments', auth, (req, res) => {
   const content = sanitize(req.body.content, 1000);
@@ -845,42 +913,28 @@ app.post('/api/auth/reset-by-email', async (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── FORGOT / RESET PASSWORD ─────────────────────────────────────────────────
-
+// ── FORGOT PASSWORD (token-based, legacy) ─────────────────────────────────────
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
-  const user = db.prepare('SELECT id, email, name FROM users WHERE email=?').get(email);
-  if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
-
+  const user = db.prepare('SELECT id, name FROM users WHERE email=?').get(email);
+  if (!user) return res.json({ ok: true }); // don't reveal if email exists
   const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
-  db.prepare('INSERT OR REPLACE INTO password_resets (user_id, token, expires_at) VALUES (?,?,?)').run(user.id, token, expiresAt);
-
-  const resetUrl = `${APP_URL}?reset=${token}`;
-  const emailSent = await sendEmail(user.email, 'Reset your Nexus password',
-    `<p>Hi ${user.name},</p>
-     <p>Click the link below to reset your password (valid for 1 hour):</p>
-     <p><a href="${resetUrl}">${resetUrl}</a></p>
-     <p>If you did not request this, ignore this email.</p>`
-  );
-
-  if (!emailSent) {
-    // Dev mode: return the link directly so it can be tested without SMTP
-    return res.json({ message: 'Reset link generated (SMTP not configured).', dev_reset_url: resetUrl });
-  }
-  res.json({ message: 'Reset link sent to your email.' });
+  const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  db.prepare('INSERT OR REPLACE INTO password_resets (user_id, token, expires_at) VALUES (?,?,?)').run(user.id, token, expires);
+  const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+  await sendEmail(email, 'Reset your Nexus password', `<p>Hi ${user.name},</p><p><a href="${resetUrl}">Click here to reset your password</a></p><p>This link expires in 1 hour.</p>`);
+  res.json({ ok: true, message: 'If that email exists, a reset link was sent.' });
 });
 
 app.get('/api/auth/reset-password/:token', (req, res) => {
   const row = db.prepare('SELECT * FROM password_resets WHERE token=?').get(req.params.token);
-  if (!row || new Date(row.expires_at + 'Z') < new Date()) return res.json({ valid: false });
-  res.json({ valid: true });
+  if (!row || new Date(row.expires_at + 'Z') < new Date()) return res.status(400).json({ error: 'Reset link expired or invalid.' });
+  res.json({ ok: true });
 });
 
 app.post('/api/auth/reset-password', async (req, res) => {
   const { token, password } = req.body;
-  if (!token || !password || password.length < 6) return res.status(400).json({ error: 'Invalid request' });
+  if (!token || !password || password.length < 6) return res.status(400).json({ error: 'Token and password (min 6 chars) required' });
   const row = db.prepare('SELECT * FROM password_resets WHERE token=?').get(token);
   if (!row || new Date(row.expires_at + 'Z') < new Date()) return res.status(400).json({ error: 'Reset link expired. Request a new one.' });
   const hash = await bcrypt.hash(password, 10);
@@ -890,57 +944,44 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // SOCKET.IO
-const onlineUsers = new Map(); // userId -> Set of socketIds
+const onlineUsers = new Map();
 
 io.on('connection', socket => {
-  socket.on('authenticate', (token) => {
+  socket.on('authenticate', token => {
     try {
       const { id } = jwt.verify(token, JWT_SECRET);
       socket.userId = id;
       socket.join(`user_${id}`);
-      // Auto-join all existing conversation rooms
-      const partners = db.prepare(
-        'SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?'
-      ).all(id, id, id);
+      const partners = db.prepare('SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?').all(id, id, id);
       partners.forEach(({ partner_id }) => socket.join([id, partner_id].sort().join('-')));
-
-      // Presence: add to online set, broadcast to contacts
       if (!onlineUsers.has(id)) onlineUsers.set(id, new Set());
       onlineUsers.get(id).add(socket.id);
       partners.forEach(({ partner_id }) => io.to(`user_${partner_id}`).emit('user_online', { userId: id }));
-
-      // Send current online list to this socket (only users they have chats with)
       const onlineNow = partners.map(p => p.partner_id).filter(pid => onlineUsers.has(pid) && onlineUsers.get(pid).size > 0);
       socket.emit('online_users', onlineNow);
     } catch {}
   });
-
-  socket.on('join_chat', (otherId) => {
+  socket.on('join_chat', otherId => {
     if (!socket.userId) return;
     socket.join([socket.userId, otherId].sort().join('-'));
   });
-
   socket.on('typing', ({ to }) => {
     if (!socket.userId) return;
     socket.to([socket.userId, to].sort().join('-')).emit('typing', { from: socket.userId });
   });
-
   socket.on('stop_typing', ({ to }) => {
     if (!socket.userId) return;
     socket.to([socket.userId, to].sort().join('-')).emit('stop_typing', { from: socket.userId });
   });
-
   socket.on('mark_read', ({ from }) => {
     if (!socket.userId || !from) return;
     db.prepare('UPDATE messages SET is_read=1 WHERE sender_id=? AND receiver_id=? AND is_read=0').run(from, socket.userId);
     io.to(`user_${from}`).emit('read_receipt', { by: socket.userId });
   });
-
   socket.on('get_presence', ({ userId }) => {
     const online = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
     socket.emit(online ? 'user_online' : 'user_offline', { userId });
   });
-
   socket.on('disconnect', () => {
     if (!socket.userId) return;
     const sockets = onlineUsers.get(socket.userId);
@@ -948,9 +989,7 @@ io.on('connection', socket => {
       sockets.delete(socket.id);
       if (sockets.size === 0) {
         onlineUsers.delete(socket.userId);
-        const partners = db.prepare(
-          'SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?'
-        ).all(socket.userId, socket.userId, socket.userId);
+        const partners = db.prepare('SELECT DISTINCT CASE WHEN sender_id=? THEN receiver_id ELSE sender_id END as partner_id FROM messages WHERE sender_id=? OR receiver_id=?').all(socket.userId, socket.userId, socket.userId);
         partners.forEach(({ partner_id }) => io.to(`user_${partner_id}`).emit('user_offline', { userId: socket.userId }));
       }
     }

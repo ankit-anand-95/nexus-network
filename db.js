@@ -236,10 +236,37 @@ const tables = [
 tables.forEach(sql => db.exec(sql));
 
 // Migrations — safe to run multiple times (try/catch for "duplicate column" errors)
+const extraTables = [
+`CREATE TABLE IF NOT EXISTS post_reactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  reaction_type TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(post_id, user_id),
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)`,
+`CREATE TABLE IF NOT EXISTS content_flags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  content_type TEXT NOT NULL,
+  content_id INTEGER NOT NULL,
+  reporter_id INTEGER NOT NULL,
+  reason TEXT DEFAULT 'inappropriate',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(content_type, content_id, reporter_id),
+  FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
+)`
+];
+extraTables.forEach(sql => db.exec(sql));
+
 const migrations = [
   `ALTER TABLE expert_profiles ADD COLUMN meeting_link TEXT DEFAULT ''`,
   `ALTER TABLE expert_profiles ADD COLUMN availability_slots TEXT DEFAULT '[]'`,
   `ALTER TABLE messages ADD COLUMN is_edited INTEGER DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN warnings INTEGER DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN blocked_until DATETIME DEFAULT NULL`,
+  `ALTER TABLE users ADD COLUMN is_disabled INTEGER DEFAULT 0`,
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 
