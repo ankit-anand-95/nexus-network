@@ -103,9 +103,11 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .post-hdr .pinfo p{font-size:12px;color:var(--sub);margin:0}
 .post-body{padding:12px 20px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .post-img{width:100%;max-height:480px;object-fit:cover;border-radius:0}
-.post-acts{display:flex;align-items:center;gap:4px;padding:8px 12px;border-top:1px solid var(--border)}
-.pact{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r-sm);background:none;border:none;cursor:pointer;font-size:13px;color:var(--sub);font-weight:600;transition:.15s}
+.post-acts{display:flex;align-items:center;gap:2px;padding:6px 8px;border-top:1px solid var(--border)}
+.pact{display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--r-sm);background:none;border:none;cursor:pointer;font-size:13px;color:var(--sub);font-weight:600;transition:.15s}
 .pact:hover{background:var(--indigo-light);color:var(--primary)}
+.emoji-trig{background:none;border:none;cursor:pointer;color:var(--sub);font-size:18px;padding:6px 10px;border-radius:8px;transition:.12s;flex-shrink:0;display:flex;align-items:center}
+.emoji-trig:hover{background:var(--indigo-light);color:var(--primary)}
 .pact.liked{color:var(--primary)}
 .anon-badge{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
 
@@ -351,8 +353,10 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 .react-pop button{background:none;border:none;cursor:pointer;font-size:26px;padding:5px 7px;border-radius:50%;transition:transform .12s,background .12s;display:flex;flex-direction:column;align-items:center;line-height:1}
 .react-pop button:hover{transform:scale(1.35)}
 .react-pop button span{font-size:9px;color:var(--sub);margin-top:2px;white-space:nowrap;display:block}
-.react-counts{display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:2px 20px 6px;min-height:24px}
-.react-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 8px;border-radius:12px;background:var(--indigo-light);font-size:12px;font-weight:600;color:var(--primary)}
+.react-counts{padding:4px 20px 6px;min-height:22px}
+.rx-bar{display:flex;align-items:center;gap:1px}
+.rx-em{font-size:15px;line-height:1;margin-right:1px}
+.rx-tot{font-size:12px;color:var(--sub);font-weight:500;margin-left:5px}
 /* EMOJI PICKER */
 .emoji-pop{position:fixed;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:8px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:9998;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;min-width:210px}
 .emoji-pop button{background:none;border:none;cursor:pointer;font-size:22px;padding:5px;border-radius:6px;transition:background .1s;line-height:1}
@@ -790,8 +794,8 @@ function renderAF(m, resetToken) {
     <p class="asub">${il ? 'Sign in to your professional network' : 'Build your professional presence'}</p>
     <div id="aerr"></div>
     ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" placeholder="Your full name"></div>' : ''}
-    <div class="fg"><label>Email</label><input id="ae" type="email" placeholder="you@example.com"></div>
-    <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="Password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
+    <div class="fg"><label>Email</label><input id="ae" type="email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
     ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" placeholder="e.g. Software Engineer at Google"></div>' : ''}
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
     <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>
@@ -1044,8 +1048,8 @@ function _renderRxCounts(reactions) {
   const total = reactions.reduce((s, r) => s + (r.count || 0), 0);
   if (!total) return '';
   const top = [...reactions].sort((a, b) => b.count - a.count).slice(0, 3);
-  return top.map(r => `<span class="react-chip">${_RX[r.reaction_type] || ''}${r.count}</span>`).join('') +
-    `<span style="font-size:12px;color:var(--sub);margin-left:2px">${total}</span>`;
+  const emojis = top.map(r => `<span class="rx-em" title="${r.reaction_type}">${_RX[r.reaction_type] || ''}</span>`).join('');
+  return `<div class="rx-bar">${emojis}<span class="rx-tot">${total > 999 ? (total/1000).toFixed(1)+'k' : total}</span></div>`;
 }
 function renderFeed(ps) {
   const el = document.getElementById('feed'); if (!el) return;
@@ -1432,7 +1436,7 @@ async function openChat(uid, name) {
       return `<div class="bub ${isMine?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot">${isMine?`<button class="edit-msg-btn" onclick="editMsg(${m.id},this)" title="Edit"><i class="fas fa-pen"></i></button>`:''}${m.is_edited?'<span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span>':''}<time>${timeAgo(m.created_at)}</time>${isMine?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`;
     }).join('')}</div>
     <div id="typind"><div class="tdots"><span></span><span></span><span></span></div><span id="tname">${escHtml(info.name||name)}</span> is typing…</div>
-    <div id="cinp"><button onclick="openEmojiPicker('cinput',this)" style="background:none;border:none;cursor:pointer;font-size:20px;padding:4px 8px;color:var(--sub);flex-shrink:0;border-radius:8px;transition:.1s" title="Emoji" onmouseover="this.style.background='var(--indigo-light)'" onmouseout="this.style.background='none'">😊</button><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
+    <div id="cinp"><button onclick="openEmojiPicker('cinput',this)" class="emoji-trig" title="Emoji"><i class="far fa-face-smile"></i></button><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
   const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
   if (socket) socket.emit('get_presence', { userId: uid });
 }
@@ -1498,16 +1502,70 @@ function closeMobileChat() {
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
+function _fmtNotifContent(text) {
+  // Replace raw ISO date strings with human-readable format
+  return text.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, iso => {
+    const d = new Date(iso);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} at ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} UTC`;
+  });
+}
 async function renderNotifs() {
   const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
   document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${x.content}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
+}
+
+async function editSal(id) {
+  const d = await api('/api/salary'); const s = d.find(x=>x.id===id); if(!s) return;
+  showModal(`<h2 style="margin-bottom:16px">Edit Salary</h2>
+    <div class="frow"><div class="fg"><label>Company *</label><input id="slco" value="${escHtml(s.company)}"></div><div class="fg"><label>Role *</label><input id="slro" value="${escHtml(s.role)}"></div></div>
+    <div class="frow"><div class="fg"><label>Salary (LPA) *</label><input id="slsa" type="number" value="${s.salary_lpa}"></div><div class="fg"><label>Experience (yrs)</label><input id="slexp" type="number" value="${s.experience_years}"></div></div>
+    <div class="frow"><div class="fg"><label>City</label><input id="slci" value="${escHtml(s.city||'')}"></div><div class="fg"><label>Tech Stack</label><input id="slst" value="${escHtml(s.tech_stack||'')}"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px"><input type="checkbox" id="slan" ${s.is_anonymous?'checked':''}> Anonymous</label>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="updateSal(${id})"><i class="fas fa-check"></i> Save</button>`);
+}
+async function updateSal(id) {
+  const b = { company: document.getElementById('slco').value, role: document.getElementById('slro').value, salary_lpa: parseFloat(document.getElementById('slsa').value), experience_years: parseInt(document.getElementById('slexp').value)||0, city: document.getElementById('slci').value, tech_stack: document.getElementById('slst').value, is_anonymous: document.getElementById('slan').checked };
+  if (!b.company || !b.role || !b.salary_lpa) { toast('Required fields missing'); return; }
+  const r = await api('/api/salary/'+id, { method:'PATCH', body: JSON.stringify(b) });
+  if (r.error) { toast(r.error); return; }
+  closeModal(); toast('Updated! 🙏'); renderSalary();
+}
+async function delSal(id) {
+  if (!confirm('Delete this salary entry?')) return;
+  await api('/api/salary/'+id, { method:'DELETE' }); toast('Deleted'); renderSalary();
+}
+async function editRev(id) {
+  const d = await api('/api/reviews'); const r = d.find(x=>x.id===id); if(!r) return;
+  showModal(`<h2 style="margin-bottom:16px">Edit Review</h2>
+    <div class="fg"><label>Company *</label><input id="rvco" value="${escHtml(r.company)}"></div>
+    <div class="fg"><label>Rating *</label><select id="rvrat"><option value="">Select…</option>${[5,4,3,2,1].map(n=>`<option ${r.overall_rating===n?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="fg"><label>Title</label><input id="rvti" value="${escHtml(r.title||'')}"></div>
+    <div class="fg"><label>Pros</label><textarea id="rvpro" rows="2">${escHtml(r.pros||'')}</textarea></div>
+    <div class="fg"><label>Cons</label><textarea id="rvcon" rows="2">${escHtml(r.cons||'')}</textarea></div>
+    <div class="frow"><div class="fg"><label>WLB /5</label><input id="rvwlb" type="number" min="1" max="5" value="${r.work_life_balance||''}"></div><div class="fg"><label>Culture /5</label><input id="rvcul" type="number" min="1" max="5" value="${r.culture||''}"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px"><input type="checkbox" id="rvrec" ${r.would_recommend?'checked':''}> Recommends</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px"><input type="checkbox" id="rvan" ${r.is_anonymous?'checked':''}> Anonymous</label>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="updateRev(${id})"><i class="fas fa-check"></i> Save</button>`);
+}
+async function updateRev(id) {
+  const rat = parseInt(document.getElementById('rvrat').value); if(!rat) { toast('Select rating'); return; }
+  const b = { company: document.getElementById('rvco').value, overall_rating: rat, title: document.getElementById('rvti').value, pros: document.getElementById('rvpro').value, cons: document.getElementById('rvcon').value, work_life_balance: document.getElementById('rvwlb').value, culture: document.getElementById('rvcul').value, would_recommend: document.getElementById('rvrec').checked, is_anonymous: document.getElementById('rvan').checked };
+  if (!b.company) { toast('Company required'); return; }
+  const r2 = await api('/api/reviews/'+id, { method:'PATCH', body: JSON.stringify(b) });
+  if (r2.error) { toast(r2.error); return; }
+  closeModal(); toast('Updated! 🙏'); renderReviews();
+}
+async function delRev(id) {
+  if (!confirm('Delete this review?')) return;
+  await api('/api/reviews/'+id, { method:'DELETE' }); toast('Deleted'); renderReviews();
 }
 
 // ── SALARY BOARD ──────────────────────────────────────────────────────────
 async function renderSalary() {
   const d = await api('/api/salary');
   document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>💰 Salary Board</h1><button class="btn btn-p" onclick="showSalForm()"><i class="fas fa-plus"></i> Share Salary</button></div>
-    ${Array.isArray(d) && d.length ? d.map(s => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${s.role}</h3><p style="color:var(--sub);font-size:13px;margin:0">${s.company}${s.city ? ' · ' + s.city : ''}</p></div><div style="text-align:right"><p style="font-size:20px;font-weight:800;color:var(--primary);margin:0">₹${s.salary_lpa}L</p><p style="font-size:11px;color:var(--sub);margin:0">per annum</p></div></div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><span class="chip chip-p">${s.experience_years}y exp</span>${s.tech_stack ? `<span class="chip" style="background:var(--inp);color:var(--sub)">${s.tech_stack}</span>` : ''}${s.is_anonymous ? '<span class="chip" style="background:#f3f4f6;color:#6b7280">Anonymous</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-coins" style="font-size:40px"></i><p>No salaries shared yet — be the first!</p></div>'}
+    ${Array.isArray(d) && d.length ? d.map(s => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${s.role}</h3><p style="color:var(--sub);font-size:13px;margin:0">${s.company}${s.city ? ' · ' + s.city : ''}</p></div><div style="display:flex;align-items:flex-start;gap:12px"><div style="text-align:right"><p style="font-size:20px;font-weight:800;color:var(--primary);margin:0">₹${s.salary_lpa}L</p><p style="font-size:11px;color:var(--sub);margin:0">per annum</p></div>${s.user_id===me?.id?`<div style="display:flex;gap:4px"><button onclick="editSal(${s.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:4px 6px;border-radius:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delSal(${s.id})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:4px 6px;border-radius:6px" title="Delete"><i class="fas fa-trash"></i></button></div>`:''}</div></div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><span class="chip chip-p">${s.experience_years}y exp</span>${s.tech_stack ? `<span class="chip" style="background:var(--inp);color:var(--sub)">${s.tech_stack}</span>` : ''}${s.is_anonymous ? '<span class="chip" style="background:#f3f4f6;color:#6b7280">Anonymous</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-coins" style="font-size:40px"></i><p>No salaries shared yet — be the first!</p></div>'}
   </div>`;
 }
 function showSalForm() {
@@ -1528,7 +1586,7 @@ async function saveSal() {
 async function renderReviews() {
   const d = await api('/api/reviews');
   document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>⭐ Company Reviews</h1><button class="btn btn-p" onclick="showRevForm()"><i class="fas fa-plus"></i> Write Review</button></div>
-    ${Array.isArray(d) && d.length ? d.map(r => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${r.company}</h3><p style="font-size:13px;color:var(--sub);margin:0">${r.title || ''}</p></div><div style="text-align:right"><div class="stars">${'★'.repeat(r.overall_rating)}${'☆'.repeat(5 - r.overall_rating)}</div><p style="font-size:12px;color:var(--sub);margin:4px 0 0">${r.is_anonymous ? 'Anonymous' : 'Verified'}</p></div></div>${r.pros ? `<div style="margin-top:12px"><p style="font-size:12px;color:#16a34a;font-weight:700;margin:0 0 3px">👍 Pros</p><p style="font-size:13px;margin:0">${r.pros}</p></div>` : ''}${r.cons ? `<div style="margin-top:8px"><p style="font-size:12px;color:#dc2626;font-weight:700;margin:0 0 3px">👎 Cons</p><p style="font-size:13px;margin:0">${r.cons}</p></div>` : ''}<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${r.work_life_balance ? `<span class="chip" style="background:var(--inp);color:var(--sub)">WLB: ${r.work_life_balance}/5</span>` : ''}${r.culture ? `<span class="chip" style="background:var(--inp);color:var(--sub)">Culture: ${r.culture}/5</span>` : ''}${r.would_recommend ? '<span class="chip" style="background:#dcfce7;color:#16a34a">Recommends</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-building" style="font-size:40px"></i><p>No reviews yet — share your experience!</p></div>'}
+    ${Array.isArray(d) && d.length ? d.map(r => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${r.company}</h3><p style="font-size:13px;color:var(--sub);margin:0">${r.title || ''}</p></div><div style="display:flex;align-items:flex-start;gap:12px"><div style="text-align:right"><div class="stars">${'★'.repeat(r.overall_rating)}${'☆'.repeat(5 - r.overall_rating)}</div><p style="font-size:12px;color:var(--sub);margin:4px 0 0">${r.is_anonymous ? 'Anonymous' : 'Verified'}</p></div>${r.user_id===me?.id?`<div style="display:flex;gap:4px"><button onclick="editRev(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:4px 6px;border-radius:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delRev(${r.id})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:4px 6px;border-radius:6px" title="Delete"><i class="fas fa-trash"></i></button></div>`:''}</div></div>${r.pros ? `<div style="margin-top:12px"><p style="font-size:12px;color:#16a34a;font-weight:700;margin:0 0 3px">👍 Pros</p><p style="font-size:13px;margin:0">${r.pros}</p></div>` : ''}${r.cons ? `<div style="margin-top:8px"><p style="font-size:12px;color:#dc2626;font-weight:700;margin:0 0 3px">👎 Cons</p><p style="font-size:13px;margin:0">${r.cons}</p></div>` : ''}<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${r.work_life_balance ? `<span class="chip" style="background:var(--inp);color:var(--sub)">WLB: ${r.work_life_balance}/5</span>` : ''}${r.culture ? `<span class="chip" style="background:var(--inp);color:var(--sub)">Culture: ${r.culture}/5</span>` : ''}${r.would_recommend ? '<span class="chip" style="background:#dcfce7;color:#16a34a">Recommends</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-building" style="font-size:40px"></i><p>No reviews yet — share your experience!</p></div>'}
   </div>`;
 }
 function showRevForm() {

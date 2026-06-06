@@ -745,6 +745,23 @@ app.post('/api/salary', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/salary/:id', auth, (req, res) => {
+  const entry = db.prepare('SELECT * FROM salary_entries WHERE id=?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (entry.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  const { company, role, salary_lpa, experience_years, city, tech_stack, is_anonymous } = req.body;
+  db.prepare('UPDATE salary_entries SET company=?,role=?,salary_lpa=?,experience_years=?,city=?,tech_stack=?,is_anonymous=? WHERE id=?')
+    .run(company||entry.company, role||entry.role, salary_lpa||entry.salary_lpa, experience_years??entry.experience_years, city??entry.city, tech_stack??entry.tech_stack, is_anonymous!==undefined?+(is_anonymous):entry.is_anonymous, req.params.id);
+  res.json({ ok: true });
+});
+app.delete('/api/salary/:id', auth, (req, res) => {
+  const entry = db.prepare('SELECT * FROM salary_entries WHERE id=?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (entry.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  db.prepare('DELETE FROM salary_entries WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // ─── COMPANY REVIEWS ─────────────────────────────────────────────────────────
 
 app.get('/api/reviews', auth, (req, res) => {
@@ -777,6 +794,23 @@ app.post('/api/reviews', auth, (req, res) => {
   const { company, overall_rating, title, pros, cons, work_life_balance, culture, salary_rating, growth, would_recommend, is_anonymous } = req.body;
   db.prepare(`INSERT INTO company_reviews (user_id, company, overall_rating, title, pros, cons, work_life_balance, culture, salary_rating, growth, would_recommend, is_anonymous) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(req.user.id, company, overall_rating, title || '', pros || '', cons || '', work_life_balance || 3, culture || 3, salary_rating || 3, growth || 3, would_recommend ? 1 : 0, is_anonymous !== false ? 1 : 0);
+  res.json({ ok: true });
+});
+
+app.patch('/api/reviews/:id', auth, (req, res) => {
+  const entry = db.prepare('SELECT * FROM company_reviews WHERE id=?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (entry.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  const { company, overall_rating, title, pros, cons, work_life_balance, culture, would_recommend, is_anonymous } = req.body;
+  db.prepare('UPDATE company_reviews SET company=?,overall_rating=?,title=?,pros=?,cons=?,work_life_balance=?,culture=?,would_recommend=?,is_anonymous=? WHERE id=?')
+    .run(company||entry.company, overall_rating||entry.overall_rating, title??entry.title, pros??entry.pros, cons??entry.cons, work_life_balance??entry.work_life_balance, culture??entry.culture, would_recommend!==undefined?+(would_recommend):entry.would_recommend, is_anonymous!==undefined?+(is_anonymous):entry.is_anonymous, req.params.id);
+  res.json({ ok: true });
+});
+app.delete('/api/reviews/:id', auth, (req, res) => {
+  const entry = db.prepare('SELECT * FROM company_reviews WHERE id=?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (entry.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  db.prepare('DELETE FROM company_reviews WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
@@ -822,7 +856,10 @@ app.post('/api/experts/:expertId/book-slot', auth, (req, res) => {
   slot.booked = true; slot.booked_by = req.user.id;
   db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), req.params.expertId);
   const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  const readableSlot = new Date(slotKey).toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const _sd = new Date(slotKey);
+  const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const readableSlot = `${_days[_sd.getUTCDay()]}, ${_sd.getUTCDate()} ${_months[_sd.getUTCMonth()]} ${_sd.getUTCFullYear()} at ${String(_sd.getUTCHours()).padStart(2,'0')}:${String(_sd.getUTCMinutes()).padStart(2,'0')} UTC`;
   createNotif(parseInt(req.params.expertId), req.user.id, 'session_booked', 0, `${actor.name} booked a session with you on ${readableSlot}`);
   // Real-time: update slot count on all clients
   const freshRow = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(req.params.expertId);
