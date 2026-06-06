@@ -1324,26 +1324,3 @@ app.get('/api/trending', auth, (req, res) => {
   _trendingTs = Date.now();
   res.json(_trendingCache);
 });
-_id=p.id
-    WHERE p.is_published=1 AND p.is_anonymous=0
-      AND p.created_at > datetime('now','-7 days')
-    GROUP BY p.id
-    ORDER BY reaction_count DESC, comment_count DESC
-    LIMIT 5
-  `).all();
-  const tagRows = db.prepare(`
-    SELECT content FROM posts
-    WHERE is_published=1 AND created_at > datetime('now','-7 days')
-    AND content LIKE '%#%'
-    LIMIT 500
-  `).all();
-  const tagCount = {};
-  tagRows.forEach(p => {
-    const tags = (p.content || '').match(/#[\w]+/g) || [];
-    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
-  });
-  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
-  _trendingCache = { top_posts: topPosts, trending_tags };
-  _trendingTs = Date.now();
-  res.json(_trendingCache);
-});
