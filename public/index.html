@@ -856,7 +856,8 @@ function initSocket() {
     apiInvalidate('/api/sessions');
     apiInvalidate('/api/experts');
     if (curPage === 'experts') renderExperts();
-    const msgs = { confirmed: '✅ Your session was accepted!', cancelled: '❌ Your session was declined.' };
+    // Determine if current user is the expert (mentor) or learner for this update
+    const msgs = { confirmed: '✅ Your session was accepted!', cancelled: '🚫 A session was cancelled.' };
     if (msgs[status]) toast(msgs[status]);
     pollBadges();
   });

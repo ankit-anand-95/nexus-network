@@ -330,4 +330,23 @@ const indexes = [
 ];
 indexes.forEach(sql => { try { db.exec(sql); } catch(e) {} });
 
+// ── ONE-TIME DATA RESET ── Set CLEAR_SESSIONS=1 in Railway env vars, deploy once, then remove it
+if (process.env.CLEAR_SESSIONS === '1') {
+  console.log('[db] CLEAR_SESSIONS=1 — wiping interview_sessions and resetting all booked slots...');
+  db.exec(`DELETE FROM interview_sessions`);
+  // Unmark all booked slots in mentor_sessions
+  const msList = db.prepare(`SELECT id, availability_slots FROM mentor_sessions`).all();
+  msList.forEach(ms => {
+    const slots = JSON.parse(ms.availability_slots || '[]').map(s => ({ ...s, booked: false, booked_by: undefined }));
+    db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+  });
+  // Unmark all booked slots in expert_profiles
+  const epList = db.prepare(`SELECT user_id, availability_slots FROM expert_profiles`).all();
+  epList.forEach(ep => {
+    const slots = JSON.parse(ep.availability_slots || '[]').map(s => ({ ...s, booked: false, booked_by: undefined }));
+    db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), ep.user_id);
+  });
+  console.log('[db] Reset complete — remove CLEAR_SESSIONS from Railway env vars now');
+}
+
 module.exports = db;

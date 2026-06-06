@@ -1019,13 +1019,25 @@ app.put('/api/sessions/:id', auth, (req, res) => {
   const learnerUser = db.prepare(`SELECT name FROM users WHERE id=?`).get(session.learner_id);
   const _releaseSlot = () => {
     if (!session.slot_key) return;
+    // Restore slot in mentor_sessions (new system)
+    if (session.mentor_session_id) {
+      const ms = db.prepare(`SELECT availability_slots FROM mentor_sessions WHERE id=?`).get(session.mentor_session_id);
+      if (ms) {
+        const slots = JSON.parse(ms.availability_slots || '[]');
+        const s = slots.find(x => x.key === session.slot_key);
+        if (s) { s.booked = false; delete s.booked_by; }
+        db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), session.mentor_session_id);
+        io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
+      }
+    }
+    // Also restore in expert_profiles (legacy)
     const ep = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
-    if (!ep) return;
-    const slots = JSON.parse(ep.availability_slots || '[]');
-    const s = slots.find(x => x.key === session.slot_key);
-    if (s) { s.booked = false; delete s.booked_by; }
-    db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
-    io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
+    if (ep) {
+      const slots = JSON.parse(ep.availability_slots || '[]');
+      const s = slots.find(x => x.key === session.slot_key);
+      if (s) { s.booked = false; delete s.booked_by; }
+      db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
+    }
   };
   if (status === 'confirmed') {
     createNotif(session.learner_id, session.expert_id, 'session_confirmed', session.id, `${expertUser.name} accepted your session booking ✅`);
@@ -1055,7 +1067,18 @@ app.delete('/api/sessions/:id', auth, (req, res) => {
   if (!session) return res.status(404).json({ error: 'Not found' });
   if (session.learner_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
   if (session.status === 'completed') return res.status(400).json({ error: 'Cannot cancel a completed session' });
-  // Release slot
+  // Release slot in mentor_sessions (new system)
+  if (session.slot_key && session.mentor_session_id) {
+    const ms = db.prepare(`SELECT availability_slots FROM mentor_sessions WHERE id=?`).get(session.mentor_session_id);
+    if (ms) {
+      const slots = JSON.parse(ms.availability_slots || '[]');
+      const s = slots.find(x => x.key === session.slot_key);
+      if (s) { s.booked = false; delete s.booked_by; }
+      db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), session.mentor_session_id);
+      io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
+    }
+  }
+  // Also release from expert_profiles (legacy)
   if (session.slot_key) {
     const ep = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
     if (ep) {
@@ -1063,12 +1086,13 @@ app.delete('/api/sessions/:id', auth, (req, res) => {
       const s = slots.find(x => x.key === session.slot_key);
       if (s) { s.booked = false; delete s.booked_by; }
       db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
-      io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
     }
   }
   db.prepare(`UPDATE interview_sessions SET status='cancelled' WHERE id=?`).run(session.id);
   const learner = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
+  // Notify mentor + real-time socket push
   createNotif(session.expert_id, req.user.id, 'session_cancelled', session.id, `${learner.name} cancelled their session booking`);
+  io.to(`user_${session.expert_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled' });
   res.json({ ok: true });
 });
 
