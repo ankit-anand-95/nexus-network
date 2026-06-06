@@ -1053,11 +1053,12 @@ async function renderHome() {
     <div id="rs">${_skelPost()}</div>
   </div>`;
   document.getElementById('pr').innerHTML = skelHtml;
-  // Fetch everything in parallel, then replace skeletons
-  await Promise.all([renderSB(), renderRightSidebar()]);
+  // Sidebars and feed load fully in parallel — don't block feed on sidebars
+  renderSB();           // fire-and-forget, updates #sl when ready
+  renderRightSidebar(); // fire-and-forget, updates #rs when ready
   renderComposer();
   document.getElementById('feed').innerHTML = '';
-  await loadMorePosts();
+  await loadMorePosts(); // only wait for the feed itself
   // Infinite scroll observer
   const sentinel = document.getElementById('feed-sentinel');
   if (sentinel) {

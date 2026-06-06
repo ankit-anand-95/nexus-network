@@ -342,21 +342,61 @@ app.get('/api/posts', auth, (req, res) => {
     : [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset];
 
   const sort = req.query.sort === 'new' ? 'new' : 'top';
+  // Use JOINed counts for ORDER BY — avoids correlated subqueries per row
   const orderBy = sort === 'top'
-    ? '(SELECT COUNT(*) FROM post_reactions WHERE post_id=p.id) DESC, (SELECT COUNT(*) FROM comments WHERE post_id=p.id) DESC, p.created_at DESC'
+    ? 'reaction_count DESC, comment_count DESC, p.created_at DESC'
     : 'p.created_at DESC';
   const posts = db.prepare(`
     SELECT p.*,
       CASE WHEN p.is_anonymous = 1 THEN 'Anonymous' ELSE u.name END as author_name,
       CASE WHEN p.is_anonymous = 1 THEN '' ELSE u.avatar_url END as author_avatar,
       CASE WHEN p.is_anonymous = 1 THEN '' ELSE u.headline END as author_headline,
-      EXISTS(SELECT 1 FROM likes WHERE post_id=p.id AND user_id=?) as liked
+      EXISTS(SELECT 1 FROM likes WHERE post_id=p.id AND user_id=?) as liked,
+      COUNT(DISTINCT pr.id) as reaction_count,
+      COUNT(DISTINCT cm.id) as comment_count
     FROM posts p
     LEFT JOIN users u ON p.author_id = u.id
+    LEFT JOIN post_reactions pr ON pr.post_id = p.id
+    LEFT JOIN comments cm ON cm.post_id = p.id
     ${feedFilter}
+    GROUP BY p.id
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `).all(...feedParams);
+
+  if (!posts.length) { res.json([]); return; }
+
+  // ── Bulk fetch — 3 queries total regardless of post count ──
+  const ids = posts.map(p => p.id);
+  const ph = ids.map(() => '?').join(',');
+
+  // All reactions grouped by post
+  const allReactions = db.prepare(
+    `SELECT post_id, reaction_type, COUNT(*) as count FROM post_reactions WHERE post_id IN (${ph}) GROUP BY post_id, reaction_type`
+  ).all(...ids);
+  const reactMap = {};
+  allReactions.forEach(r => { (reactMap[r.post_id] = reactMap[r.post_id] || []).push(r); });
+
+  // My reaction per post
+  const myReactions = db.prepare(
+    `SELECT post_id, reaction_type FROM post_reactions WHERE post_id IN (${ph}) AND user_id=?`
+  ).all(...ids, req.user.id);
+  const myReactMap = {};
+  myReactions.forEach(r => { myReactMap[r.post_id] = r.reaction_type; });
+
+  // Top 2 comments per post — one query, slice in JS
+  const allComments = db.prepare(`
+    SELECT c.post_id, c.id, c.content, c.created_at, c.author_id,
+      u.name as author_name, u.avatar_url as author_avatar
+    FROM comments c JOIN users u ON c.author_id=u.id
+    WHERE c.post_id IN (${ph})
+    ORDER BY c.post_id, c.created_at DESC
+  `).all(...ids);
+  const commentMap = {};
+  allComments.forEach(c => {
+    if (!commentMap[c.post_id]) commentMap[c.post_id] = [];
+    if (commentMap[c.post_id].length < 2) commentMap[c.post_id].push(c);
+  });
 
   const result = posts.map(p => {
     const post = { ...p, is_mine: p.author_id === req.user.id };
@@ -365,16 +405,10 @@ app.get('/api/posts', auth, (req, res) => {
       const vote = db.prepare(`SELECT option_id FROM poll_votes WHERE post_id=? AND user_id=?`).get(p.id, req.user.id);
       post.user_vote = vote?.option_id || null;
     }
-    // Reactions
-    post.reactions = db.prepare(`SELECT reaction_type, COUNT(*) as count FROM post_reactions WHERE post_id=? GROUP BY reaction_type`).all(p.id);
-    post.my_reaction = db.prepare(`SELECT reaction_type FROM post_reactions WHERE post_id=? AND user_id=?`).get(p.id, req.user.id)?.reaction_type || null;
-    // Strip author_id from anonymous posts for others
+    post.reactions = reactMap[p.id] || [];
+    post.my_reaction = myReactMap[p.id] || null;
+    post.top_comments = commentMap[p.id] || [];
     if (p.is_anonymous && p.author_id !== req.user.id) post.author_id = null;
-    post.top_comments = db.prepare(`
-      SELECT c.*, u.name as author_name, u.avatar_url as author_avatar
-      FROM comments c JOIN users u ON c.author_id=u.id
-      WHERE c.post_id=? ORDER BY c.created_at DESC LIMIT 2
-    `).all(p.id);
     return post;
   });
   res.json(result);
@@ -1128,7 +1162,6 @@ app.get('/api/trending', auth, (req, res) => {
   if (_trendingCache && Date.now() - _trendingTs < 5 * 60 * 1000) {
     return res.json(_trendingCache);
   }
-  // Top posts by reactions in last 7 days
   const topPosts = db.prepare(`
     SELECT p.id, p.content, u.name as author_name, u.avatar_url as author_avatar,
       COUNT(pr.id) as reaction_count, COUNT(DISTINCT c.id) as comment_count
@@ -1142,7 +1175,6 @@ app.get('/api/trending', auth, (req, res) => {
     ORDER BY reaction_count DESC, comment_count DESC
     LIMIT 5
   `).all();
-  // Hashtags extracted via SQL to avoid pulling all content into JS
   const tagRows = db.prepare(`
     SELECT content FROM posts
     WHERE is_published=1 AND created_at > datetime('now','-7 days')

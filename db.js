@@ -298,4 +298,21 @@ const migrations = [
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 
+// ── INDEXES ── (safe to re-run — IF NOT EXISTS)
+const indexes = [
+  `CREATE INDEX IF NOT EXISTS idx_posts_published_created ON posts(is_published, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_connections_requester ON connections(requester_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_connections_addressee ON connections(addressee_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON post_reactions(post_id, reaction_type)`,
+  `CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON post_reactions(post_id, user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(sender_id, receiver_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes(post_id, user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_saved_posts_user ON saved_posts(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_profile_views_profile ON profile_views(profile_id, viewed_at DESC)`,
+];
+indexes.forEach(sql => { try { db.exec(sql); } catch(e) {} });
+
 module.exports = db;
