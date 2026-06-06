@@ -248,6 +248,103 @@ body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter
 /* SEARCH HIGHLIGHT */
 mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;padding:0 2px}
 
+/* ── BOTTOM NAV (mobile) ─────────────────────────────────── */
+#bnav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--card);border-top:1px solid var(--border);z-index:100;justify-content:space-around;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+#bnav button{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;cursor:pointer;color:var(--sub);font-size:10px;font-weight:600;padding:5px 10px;border-radius:10px;position:relative;min-width:50px;transition:.12s}
+#bnav button.active,#bnav button:hover{color:var(--primary)}
+#bnav button i{font-size:21px}
+#bnav button span.bnlbl{font-size:10px;line-height:1}
+.bn-badge{position:absolute;top:1px;right:4px;background:#ef4444;color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;font-weight:700;min-width:14px;text-align:center;display:none}
+/* Back arrow in chat (mobile only) */
+.back-to-threads{display:none;background:none;border:none;cursor:pointer;color:var(--primary);font-size:15px;padding:5px 8px;border-radius:6px;flex-shrink:0;align-items:center;gap:5px;font-weight:700}
+@media(max-width:640px){.back-to-threads{display:flex}}
+
+/* ── TABLET (641–860px) ──────────────────────────────────── */
+@media(max-width:860px){
+  /* Nav: icon-only, hide text labels */
+  .nb{font-size:0;padding:6px 9px}
+  .nb i{font-size:20px}
+  .nb.active::after{bottom:-8px}
+  /* Hide less-used nav items on tablet */
+  #nb-salary,#nb-reviews{display:none}
+  .nav-srch{flex:0 0 200px}
+  #pr{padding:76px 16px 40px}
+}
+
+/* ── MOBILE (≤640px) ─────────────────────────────────────── */
+@media(max-width:640px){
+  /* Nav */
+  nav{padding:0 12px;height:56px}
+  .logo-txt{display:none}
+  .logo-icon{width:32px;height:32px;font-size:15px}
+  .nav-srch{flex:1;min-width:0;margin:0 8px}
+  .nav-srch input{font-size:13px;padding:8px 10px 8px 32px}
+  .nav-links{display:none}
+  /* Show bottom nav */
+  #bnav{display:flex}
+  /* Global content offset for bottom nav */
+  #pr{padding:64px 10px 76px}
+  /* Messaging full-screen toggle */
+  #mlay{grid-template-columns:1fr;height:calc(100vh - 112px)}
+  .mlist{height:100%;display:flex;flex-direction:column}
+  #ccol{position:fixed;inset:56px 0 0 0;background:var(--card);z-index:50;display:none;flex-direction:column}
+  #mlay.chat-open #ccol{display:flex}
+  #mlay.chat-open .mlist{display:none}
+  /* Hide bottom nav when chat is open (full screen) */
+  body.in-chat #bnav{display:none}
+  body.in-chat #mlay{height:calc(100vh - 56px)}
+  /* Modals → bottom sheet */
+  .modal-bg{align-items:flex-end;padding:0}
+  .modal{border-radius:20px 20px 0 0;max-height:90vh;width:100%;max-width:100%;box-sizing:border-box;padding:22px 20px}
+  /* Layout */
+  .two-col{grid-template-columns:1fr;gap:0}
+  #sl{display:none}
+  .card{border-radius:10px}
+  .sug-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  /* Feed */
+  .post-hdr{padding:12px 14px 0}
+  .post-body{padding:10px 14px;font-size:13px}
+  .post-acts{padding:4px 6px;gap:0}
+  .pact{padding:7px 10px;font-size:12px;gap:4px}
+  .react-counts{padding:2px 14px 4px}
+  /* Composer */
+  .comp-wrap{padding:12px 14px 6px}
+  .comp-ta{min-height:72px;font-size:13px}
+  .comp-acts{padding:6px 14px 10px;gap:4px;flex-wrap:wrap}
+  .cbtn{padding:5px 8px;font-size:11px;gap:4px}
+  /* Messaging */
+  .mhdr{padding:12px 16px;font-size:14px}
+  .mthread{padding:12px 14px}
+  #ctop{padding:10px 14px}
+  #cmsgs{padding:12px 14px}
+  #cinp{padding:10px 12px;gap:6px}
+  #cinp input{font-size:13px;padding:9px 12px}
+  /* Profile */
+  .prof-body{padding:52px 16px 14px}
+  .prof-body h1{font-size:18px}
+  .prof-actions{gap:8px}
+  /* Forms */
+  .frow{grid-template-columns:1fr}
+  .frow2{flex-direction:column}
+  /* Page headers */
+  .phdr h1{font-size:18px}
+  .phdr{margin-bottom:12px}
+  /* Jobs */
+  .ji{padding:14px}
+  .jmeta{gap:8px}
+  /* Experts */
+  .sug-grid .card{padding:14px}
+  /* Notifications */
+  .prow{padding:12px 14px}
+}
+/* Very small phones */
+@media(max-width:380px){
+  .sug-grid{grid-template-columns:1fr}
+  #bnav button .bnlbl{display:none}
+  #bnav button{min-width:44px}
+  .pact{padding:6px 8px;font-size:11px}
+}
+
 /* REACTIONS */
 .react-wrap{position:relative;display:inline-block}
 .react-pop{position:fixed;background:var(--card);border:1px solid var(--border);border-radius:32px;padding:8px 12px;box-shadow:0 6px 28px rgba(0,0,0,.18);z-index:500;display:flex;gap:4px;animation:fadeIn .12s ease}
@@ -327,6 +424,16 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 
 <div id="toast-el" class="toast"></div>
 
+<!-- BOTTOM NAV (mobile only, shown via CSS) -->
+<div id="bnav">
+  <button id="bnb-home" onclick="go('home')"><i class="fas fa-house"></i><span class="bnlbl">Home</span></button>
+  <button id="bnb-network" onclick="go('network')"><i class="fas fa-users"></i><span class="bnlbl">Network</span><span class="bn-badge" id="bn-connbadge"></span></button>
+  <button id="bnb-jobs" onclick="go('jobs')"><i class="fas fa-briefcase"></i><span class="bnlbl">Jobs</span></button>
+  <button id="bnb-messaging" onclick="go('messaging')"><i class="fas fa-comment-dots"></i><span class="bnlbl">Chat</span><span class="bn-badge" id="bn-mbadge"></span></button>
+  <button id="bnb-notifications" onclick="go('notifications')"><i class="fas fa-bell"></i><span class="bnlbl">Alerts</span><span class="bn-badge" id="bn-nbadge"></span></button>
+  <button id="bnb-profile" onclick="toggleMeMenu()"><i class="fas fa-user"></i><span class="bnlbl">Me</span></button>
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
@@ -372,14 +479,27 @@ function showModal(html) {
   document.body.appendChild(bg);
 }
 function closeModal() { document.getElementById('mbg')?.remove(); }
-function updBadge(id, n) { const el = document.getElementById(id); if (!el) return; el.style.display = n > 0 ? 'block' : 'none'; el.textContent = n; }
+function updBadge(id, n) {
+  // Top nav badge
+  const el = document.getElementById(id);
+  if (el) { el.style.display = n > 0 ? 'block' : 'none'; el.textContent = n; }
+  // Bottom nav badge mirror
+  const bel = document.getElementById('bn-' + id);
+  if (bel) { bel.style.display = n > 0 ? 'block' : 'none'; bel.textContent = n; }
+}
 
 // ── NAV ───────────────────────────────────────────────────────────────────
 function go(page, extra) {
   curPage = page;
   const si = document.getElementById('gsrch'); if (si) si.value = '';
+  // Top nav active
   document.querySelectorAll('.nb[id^=nb-]').forEach(b => b.classList.remove('active'));
   const nb = document.getElementById('nb-' + page); if (nb) nb.classList.add('active');
+  // Bottom nav active
+  document.querySelectorAll('#bnav button').forEach(b => b.classList.remove('active'));
+  const bnb = document.getElementById('bnb-' + page); if (bnb) bnb.classList.add('active');
+  // Clear mobile chat state
+  document.body.classList.remove('in-chat');
   const _pr = document.getElementById('pr'); _pr.removeAttribute('style'); _pr.innerHTML = '<div class="ld"><i class="fas fa-circle-notch spin"></i> Loading…</div>';
   ({ home: renderHome, profile: renderProfile, network: renderNetwork, messaging: renderMessaging, notifications: renderNotifs, salary: renderSalary, reviews: renderReviews, experts: renderExperts, jobs: renderJobs }[page] || renderHome)(extra);
 }
@@ -1288,4 +1408,335 @@ async function openChat(uid, name) {
   document.getElementById('mt-' + uid)?.classList.add('active');
   if (socket) { socket.emit('join_chat', uid); socket.emit('mark_read', { from: uid }); }
   updBadge('mbadge', 0); // clear badge when opening any conversation
-  const [info, msgs] = await Promise.al
+  // Mobile: show chat full-screen
+  const mlay = document.getElementById('mlay');
+  if (mlay) mlay.classList.add('chat-open');
+  document.body.classList.add('in-chat');
+  const [info, msgs] = await Promise.all([
+    api('/api/users/' + uid).catch(() => ({ name: name || 'User' })),
+    api('/api/messages/' + uid)
+  ]);
+  const col = document.getElementById('ccol'); if (!col) return;
+  const isOnline = window._online?.has(String(uid));
+  const hl = info.headline || '';
+  col.innerHTML = `
+    <div id="ctop">
+      <button class="back-to-threads" onclick="closeMobileChat()" title="Back"><i class="fas fa-arrow-left"></i></button>
+      <div class="pres-wrap${isOnline?' online':''}" id="ctop-pres">${av(info,'av40')}<div class="pres-dot"></div></div>
+      <div><h3>${escHtml(info.name||name)}</h3><p id="ctop-sub" data-hl="${escHtml(hl)}">${isOnline?'Active now':hl}</p></div>
+      <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button>
+    </div>
+    <div id="cmsgs">${(Array.isArray(msgs)?msgs:[]).map(m=>{
+      const isMine = m.sender_id==me.id;
+      return `<div class="bub ${isMine?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot">${isMine?`<button class="edit-msg-btn" onclick="editMsg(${m.id},this)" title="Edit"><i class="fas fa-pen"></i></button>`:''}${m.is_edited?'<span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span>':''}<time>${timeAgo(m.created_at)}</time>${isMine?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`;
+    }).join('')}</div>
+    <div id="typind"><div class="tdots"><span></span><span></span><span></span></div><span id="tname">${escHtml(info.name||name)}</span> is typing…</div>
+    <div id="cinp"><button onclick="openEmojiPicker('cinput',this)" style="background:none;border:none;cursor:pointer;font-size:20px;padding:4px 8px;color:var(--sub);flex-shrink:0;border-radius:8px;transition:.1s" title="Emoji" onmouseover="this.style.background='var(--indigo-light)'" onmouseout="this.style.background='none'">😊</button><input id="cinput" placeholder="Write a message…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendMsg();}else{emitTyp();}"><button class="btn btn-p" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button></div>`;
+  const mb = document.getElementById('cmsgs'); if (mb) mb.scrollTop = mb.scrollHeight;
+  if (socket) socket.emit('get_presence', { userId: uid });
+}
+let _typTimer;
+function emitTyp() {
+  if (!socket || !achat) return;
+  socket.emit('typing', { to: achat });
+  clearTimeout(_typTimer);
+  _typTimer = setTimeout(() => { if (socket && achat) socket.emit('stop_typing', { to: achat }); }, 2000);
+}
+async function sendMsg() {
+  const inp = document.getElementById('cinput');
+  const c = inp?.value.trim(); if (!c || !achat) return;
+  inp.value = '';
+  if (socket) { socket.emit('stop_typing', { to: achat }); clearTimeout(_typTimer); }
+  const tempId = 'tmp-' + Date.now();
+  const mb = document.getElementById('cmsgs');
+  if (mb) {
+    const div = document.createElement('div');
+    div.className = 'bub mine'; div.setAttribute('data-mid', tempId);
+    div.innerHTML = `${escHtml(c)}<div class="bub-foot"><time>just now</time><span class="tick sent"><i class="fas fa-clock" style="font-size:9px;opacity:.7"></i></span></div>`;
+    mb.appendChild(div); mb.scrollTop = mb.scrollHeight;
+  }
+  const msg = await api('/api/messages/' + achat, { method: 'POST', body: JSON.stringify({ content: c }) });
+  const tmpEl = mb?.querySelector('[data-mid="' + tempId + '"]');
+  if (msg && !msg.error) {
+    if (tmpEl) {
+      tmpEl.setAttribute('data-mid', msg.id);
+      const tick = tmpEl.querySelector('.tick');
+      if (tick) { tick.className = 'tick sent'; tick.innerHTML = '<i class="fas fa-check"></i>'; }
+    }
+  } else {
+    if (tmpEl) { tmpEl.style.opacity = '0.4'; const tick = tmpEl.querySelector('.tick'); if (tick) tick.innerHTML = '!'; }
+    toast('Failed to send'); inp.value = c;
+  }
+  refreshThreads();
+}
+function editMsg(id, btn) {
+  const bub = btn.closest('.bub'); if (!bub) return;
+  const currentText = bub.firstChild?.textContent?.trim() || '';
+  bub.innerHTML = `<div style="display:flex;gap:6px;align-items:center">
+    <input id="edit-msg-inp-${id}" value="${escHtml(currentText)}" style="flex:1;padding:6px 10px;border:1.5px solid rgba(255,255,255,.4);border-radius:8px;background:rgba(255,255,255,.15);color:#fff;font-size:13px" onkeydown="if(event.key==='Enter')_saveMsg(${id});if(event.key==='Escape')openChat(achat)">
+    <button onclick="_saveMsg(${id})" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;padding:5px 10px;cursor:pointer;color:#fff;font-size:12px"><i class="fas fa-check"></i></button>
+    <button onclick="openChat(achat)" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px"><i class="fas fa-times"></i></button>
+  </div>`;
+  document.getElementById('edit-msg-inp-' + id)?.focus();
+}
+async function _saveMsg(id) {
+  const inp = document.getElementById('edit-msg-inp-' + id);
+  const val = inp?.value?.trim(); if (!val) return;
+  const r = await api('/api/messages/' + id, { method: 'PATCH', body: JSON.stringify({ content: val }) });
+  if (r.error) { toast(r.error); return; }
+  const bub = document.querySelector('[data-mid="' + id + '"]');
+  if (bub) {
+    bub.innerHTML = `${escHtml(val)}<div class="bub-foot"><button class="edit-msg-btn" onclick="editMsg(${id},this)" title="Edit"><i class="fas fa-pen"></i></button><span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span><time>just now</time><span class="tick sent"><i class="fas fa-check"></i></span></div>`;
+  }
+}
+function closeMobileChat() {
+  const mlay = document.getElementById('mlay');
+  if (mlay) mlay.classList.remove('chat-open');
+  document.body.classList.remove('in-chat');
+  achat = null;
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────────────
+async function renderNotifs() {
+  const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
+  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${x.content}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
+}
+
+// ── SALARY BOARD ──────────────────────────────────────────────────────────
+async function renderSalary() {
+  const d = await api('/api/salary');
+  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>💰 Salary Board</h1><button class="btn btn-p" onclick="showSalForm()"><i class="fas fa-plus"></i> Share Salary</button></div>
+    ${Array.isArray(d) && d.length ? d.map(s => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${s.role}</h3><p style="color:var(--sub);font-size:13px;margin:0">${s.company}${s.city ? ' · ' + s.city : ''}</p></div><div style="text-align:right"><p style="font-size:20px;font-weight:800;color:var(--primary);margin:0">₹${s.salary_lpa}L</p><p style="font-size:11px;color:var(--sub);margin:0">per annum</p></div></div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><span class="chip chip-p">${s.experience_years}y exp</span>${s.tech_stack ? `<span class="chip" style="background:var(--inp);color:var(--sub)">${s.tech_stack}</span>` : ''}${s.is_anonymous ? '<span class="chip" style="background:#f3f4f6;color:#6b7280">Anonymous</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-coins" style="font-size:40px"></i><p>No salaries shared yet — be the first!</p></div>'}
+  </div>`;
+}
+function showSalForm() {
+  showModal(`<h2 style="margin-bottom:16px">Share Your Salary</h2>
+    <div class="frow"><div class="fg"><label>Company *</label><input id="slco"></div><div class="fg"><label>Role *</label><input id="slro"></div></div>
+    <div class="frow"><div class="fg"><label>Salary (LPA) *</label><input id="slsa" type="number" placeholder="12.5"></div><div class="fg"><label>Experience (yrs)</label><input id="slexp" type="number" placeholder="3"></div></div>
+    <div class="frow"><div class="fg"><label>City</label><input id="slci" placeholder="Bangalore"></div><div class="fg"><label>Tech Stack</label><input id="slst" placeholder="React, Node"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px"><input type="checkbox" id="slan"> Share anonymously</label>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveSal()"><i class="fas fa-share"></i> Share</button>`);
+}
+async function saveSal() {
+  const b = { company: document.getElementById('slco').value, role: document.getElementById('slro').value, salary_lpa: parseFloat(document.getElementById('slsa').value), experience_years: parseInt(document.getElementById('slexp').value) || 0, city: document.getElementById('slci').value, tech_stack: document.getElementById('slst').value, is_anonymous: document.getElementById('slan').checked };
+  if (!b.company || !b.role || !b.salary_lpa) { toast('Required fields missing'); return; }
+  await api('/api/salary', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Salary shared! 🙏'); renderSalary();
+}
+
+// ── REVIEWS ───────────────────────────────────────────────────────────────
+async function renderReviews() {
+  const d = await api('/api/reviews');
+  document.getElementById('pr').innerHTML = `<div style="max-width:800px;margin:0 auto"><div class="phdr"><h1>⭐ Company Reviews</h1><button class="btn btn-p" onclick="showRevForm()"><i class="fas fa-plus"></i> Write Review</button></div>
+    ${Array.isArray(d) && d.length ? d.map(r => `<div class="card cb"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700;margin:0 0 4px">${r.company}</h3><p style="font-size:13px;color:var(--sub);margin:0">${r.title || ''}</p></div><div style="text-align:right"><div class="stars">${'★'.repeat(r.overall_rating)}${'☆'.repeat(5 - r.overall_rating)}</div><p style="font-size:12px;color:var(--sub);margin:4px 0 0">${r.is_anonymous ? 'Anonymous' : 'Verified'}</p></div></div>${r.pros ? `<div style="margin-top:12px"><p style="font-size:12px;color:#16a34a;font-weight:700;margin:0 0 3px">👍 Pros</p><p style="font-size:13px;margin:0">${r.pros}</p></div>` : ''}${r.cons ? `<div style="margin-top:8px"><p style="font-size:12px;color:#dc2626;font-weight:700;margin:0 0 3px">👎 Cons</p><p style="font-size:13px;margin:0">${r.cons}</p></div>` : ''}<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${r.work_life_balance ? `<span class="chip" style="background:var(--inp);color:var(--sub)">WLB: ${r.work_life_balance}/5</span>` : ''}${r.culture ? `<span class="chip" style="background:var(--inp);color:var(--sub)">Culture: ${r.culture}/5</span>` : ''}${r.would_recommend ? '<span class="chip" style="background:#dcfce7;color:#16a34a">Recommends</span>' : ''}</div></div>`).join('') : '<div class="card empty"><i class="fas fa-building" style="font-size:40px"></i><p>No reviews yet — share your experience!</p></div>'}
+  </div>`;
+}
+function showRevForm() {
+  showModal(`<h2 style="margin-bottom:16px">Write a Review</h2>
+    <div class="fg"><label>Company *</label><input id="rvco"></div>
+    <div class="fg"><label>Rating *</label><select id="rvrat"><option value="">Select…</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>
+    <div class="fg"><label>Title</label><input id="rvti" placeholder="e.g. Great place to grow"></div>
+    <div class="fg"><label>Pros</label><textarea id="rvpro" rows="2" placeholder="What's great about working here?"></textarea></div>
+    <div class="fg"><label>Cons</label><textarea id="rvcon" rows="2" placeholder="What could be better?"></textarea></div>
+    <div class="frow"><div class="fg"><label>Work-Life Balance /5</label><input id="rvwlb" type="number" min="1" max="5"></div><div class="fg"><label>Culture /5</label><input id="rvcul" type="number" min="1" max="5"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px"><input type="checkbox" id="rvrec"> Would recommend</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px"><input type="checkbox" id="rvan"> Anonymous</label>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveRev()"><i class="fas fa-check"></i> Submit Review</button>`);
+}
+async function saveRev() {
+  const r = parseInt(document.getElementById('rvrat').value); if (!r) { toast('Select a rating'); return; }
+  const b = { company: document.getElementById('rvco').value, overall_rating: r, title: document.getElementById('rvti').value, pros: document.getElementById('rvpro').value, cons: document.getElementById('rvcon').value, work_life_balance: document.getElementById('rvwlb').value, culture: document.getElementById('rvcul').value, would_recommend: document.getElementById('rvrec').checked, is_anonymous: document.getElementById('rvan').checked };
+  if (!b.company) { toast('Company required'); return; }
+  await api('/api/reviews', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Review submitted! 🙏'); renderReviews();
+}
+
+// ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
+async function renderExperts() {
+  const d = await api('/api/experts');
+  const cards = Array.isArray(d) && d.length ? d.filter(e => e.user_id != me?.id).map(e => {
+    const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || '');
+    const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
+    const freeSlots = slots.filter(s => !s.booked).length;
+    const totalSlots = slots.length;
+    return `<div class="card" style="padding:20px;text-align:center" data-expert="${e.user_id}">
+      ${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}
+      <h4 style="margin:10px 0 2px;font-size:15px">${escHtml(e.name || 'Mentor')}</h4>
+      <p style="font-size:12px;color:var(--sub);margin:0 0 6px">${escHtml(e.headline || '')}</p>
+      <p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 4px">${escHtml(expertiseStr)}</p>
+      <p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 4px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub);font-size:12px">/session</span></p>
+      ${totalSlots ? `<p class="slot-count" style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p class="slot-count" style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
+      <button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name||'Mentor')}')"><i class="fas fa-video"></i> Book Session</button>
+    </div>`;
+  }).join('') : '<div class="card empty" style="text-align:center;padding:40px"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No other mentors yet</p></div>';
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
+    <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1><button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button></div>
+    <div class="sug-grid">${cards}</div>
+  </div>`;
+}
+async function bookSession(expertId, expertName) {
+  const experts = await api('/api/experts');
+  const e = Array.isArray(experts) ? experts.find(x => x.user_id == expertId) : null;
+  const slots = Array.isArray(e?.availability_slots) ? e.availability_slots : [];
+  if (!slots.length) {
+    showModal(`<h2 style="margin-bottom:12px">Book with ${escHtml(expertName)}</h2>
+      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:16px;margin-bottom:16px;font-size:13px">
+        <p style="margin:0 0 8px;font-weight:600"><i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i>Meeting Link</p>
+        ${e?.meeting_link ? `<a href="${e.meeting_link}" target="_blank" style="color:var(--primary);word-break:break-all">${e.meeting_link}</a>` : '<p style="margin:0;color:var(--sub)">No meeting link set yet</p>'}
+      </div>
+      <p style="color:var(--sub);font-size:13px;text-align:center">No time slots added yet. Contact the mentor directly.</p>
+      ${e?.meeting_link ? `<a href="${e.meeting_link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center;margin-top:8px"><i class="fas fa-external-link-alt"></i> Join Meeting Room</a>` : ''}
+    `);
+    return;
+  }
+  const slotRows = slots.map(s => {
+    const dt = new Date(s.key);
+    const label = dt.toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    return s.booked
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--inp);margin-bottom:8px;opacity:.5"><span style="font-size:13px;text-decoration:line-through">${label}</span><span style="font-size:11px;color:#ef4444;font-weight:600">Booked</span></div>`
+      : `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1px solid var(--border);margin-bottom:8px;cursor:pointer" onclick="confirmBookSlot(${expertId},'${s.key}','${escHtml(expertName)}','${e?.meeting_link||''}')"><span style="font-size:13px;font-weight:600">${label}</span><span class="btn btn-p btn-sm" style="pointer-events:none">Select</span></div>`;
+  }).join('');
+  showModal(`<h2 style="margin-bottom:4px">Book with ${escHtml(expertName)}</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Pick an available time slot below</p>
+    <div style="max-height:340px;overflow-y:auto">${slotRows}</div>`);
+}
+async function confirmBookSlot(expertId, slotKey, expertName, meetingLink) {
+  const r = await api(`/api/experts/${expertId}/book-slot`, { method:'POST', body: JSON.stringify({ slotKey }) });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  closeModal();
+  const link = r.meeting_link || meetingLink;
+  if (link) {
+    showModal(`<div style="text-align:center;padding:12px 0">
+      <div style="font-size:48px;margin-bottom:12px">🎉</div>
+      <h2 style="margin-bottom:8px">Session Booked!</h2>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:20px">You're booked with ${escHtml(expertName)}. Join using the link below.</p>
+      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:14px;margin-bottom:16px;word-break:break-all;font-size:13px">
+        <i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i><a href="${link}" target="_blank" style="color:var(--primary)">${link}</a>
+      </div>
+      <a href="${link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center"><i class="fas fa-external-link-alt"></i> Join Meeting Now</a>
+    </div>`);
+  } else {
+    toast('Session booked! 🎉 The mentor will share a meeting link.');
+    renderExperts();
+  }
+}
+async function showExpertForm() {
+  const existing = await api('/api/experts/me');
+  const slots = Array.isArray(existing?.availability_slots) ? existing.availability_slots : [];
+  const slotsJson = JSON.stringify(slots);
+  showModal(`<h2 style="margin-bottom:16px">Offer Mentoring</h2>
+    <div class="fg"><label>Expertise <span style="color:var(--sub);font-size:11px">(comma separated)</span></label>
+      <input id="exex" placeholder="e.g. System Design, React, DSA" value="${escHtml((existing?.expertise||[]).join(', '))}"></div>
+    <div class="fg"><label>Price per session (₹)</label>
+      <input id="expr" type="number" placeholder="500" value="${existing?.price_per_session||''}"></div>
+    <div class="fg"><label>Meeting Link <span style="color:var(--sub);font-size:11px">(Zoom / Google Meet / Teams)</span></label>
+      <input id="exlink" type="url" placeholder="https://zoom.us/j/..." value="${escHtml(existing?.meeting_link||'')}"></div>
+    <div class="fg"><label>Bio / Description</label>
+      <textarea id="exbi" rows="2">${escHtml(existing?.bio||'')}</textarea></div>
+    <div class="fg"><label>Availability Slots <span style="color:var(--sub);font-size:11px">(add your open times)</span></label>
+      <div id="slotlist" style="margin-bottom:8px">${slots.map(s=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)"><span style="flex:1">${new Date(s.key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>${s.booked?'<span style="font-size:11px;color:#ef4444">Booked</span>':'<button type="button" onclick="removeSlot(\''+s.key+'\')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>'}</div>`).join('')}</div>
+      <div style="display:flex;gap:8px">
+        <input type="datetime-local" id="exslot" style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px">
+        <button type="button" class="btn btn-o btn-sm" onclick="addSlot()"><i class="fas fa-plus"></i> Add</button>
+      </div>
+    </div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveExpert()"><i class="fas fa-check"></i> Save Profile</button>
+    <script>window._exSlots=${slotsJson};<\/script>`);
+}
+function addSlot() {
+  const val = document.getElementById('exslot')?.value; if (!val) { toast('Pick a date and time'); return; }
+  window._exSlots = window._exSlots || [];
+  const key = new Date(val).toISOString();
+  if (window._exSlots.find(s=>s.key===key)) { toast('Slot already added'); return; }
+  window._exSlots.push({ key, booked: false });
+  document.getElementById('exslot').value = '';
+  const list = document.getElementById('slotlist');
+  if (list) {
+    const div = document.createElement('div');
+    div.setAttribute('data-slot', key);
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;background:var(--indigo-light);padding:8px 12px;border-radius:var(--r-sm)';
+    div.innerHTML = `<span style="flex:1">${new Date(key).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><button type="button" onclick="removeSlot('${key}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px"><i class="fas fa-times"></i></button>`;
+    list.appendChild(div);
+  }
+}
+function removeSlot(key) {
+  window._exSlots = (window._exSlots||[]).filter(s=>s.key!==key);
+  document.querySelector('[data-slot="'+key+'"]')?.remove();
+}
+async function saveExpert() {
+  const expertise = document.getElementById('exex')?.value||'';
+  const price_per_session = parseInt(document.getElementById('expr')?.value)||500;
+  const meeting_link = document.getElementById('exlink')?.value||'';
+  const bio = document.getElementById('exbi')?.value||'';
+  if (!expertise) { toast('Expertise required'); return; }
+  if (meeting_link && !meeting_link.startsWith('http')) { toast('Meeting link must start with http'); return; }
+  await api('/api/experts/me', { method:'POST', body: JSON.stringify({ expertise: expertise.split(',').map(s=>s.trim()).filter(Boolean), price_per_session, meeting_link, bio, availability_slots: window._exSlots||[] }) });
+  closeModal(); toast('Profile saved! 🎓'); renderExperts();
+}
+
+// ── JOBS ──────────────────────────────────────────────────────────────────
+async function renderJobs() {
+  const j = await api('/api/jobs');
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto"><div class="phdr"><h1>💼 Jobs</h1><button class="btn btn-p" onclick="showPostJob()"><i class="fas fa-plus"></i> Post Job</button></div>
+    <div class="card cb" style="margin-bottom:16px"><div class="frow2"><input id="jq" placeholder="Search jobs, companies…" oninput="filJobs()"><select id="jt" onchange="filJobs()"><option value="">All types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
+    <div id="jlist">${rJobList(Array.isArray(j) ? j : [])}</div>`;
+  window._jd = Array.isArray(j) ? j : [];
+}
+function rJobList(d) {
+  if (!d.length) return '<div class="card empty"><i class="fas fa-briefcase" style="font-size:40px"></i><p>No jobs found</p></div>';
+  return d.map(j => `<div class="card"><div class="ji"><div class="fb" style="margin-bottom:8px"><div><h3>${j.title}</h3><p class="jco">${j.company}</p></div>${j.poster_avatar ? `<img src="${j.poster_avatar}" class="av av48" style="object-fit:cover;border-radius:50%">` : av({ name: j.poster_name }, 'av48')}</div><div class="jmeta"><span><i class="fas fa-location-dot"></i>${j.location || 'Not specified'}</span><span><i class="fas fa-clock"></i>${j.job_type}</span>${j.salary_range ? `<span><i class="fas fa-indian-rupee-sign"></i>${j.salary_range}</span>` : ''}<span><i class="fas fa-users"></i>${j.applications_count} applicants</span><span><i class="fas fa-calendar"></i>${timeAgo(j.created_at)}</span></div>${j.description ? `<p class="jdesc">${j.description.slice(0, 200)}${j.description.length > 200 ? '…' : ''}</p>` : ''}<div style="display:flex;gap:8px;margin-top:12px">${j.applied ? '<button class="btn btn-g btn-sm" disabled><i class="fas fa-check"></i> Applied</button>' : `<button class="btn btn-p btn-sm" onclick="showApply(${j.id},'${j.title.replace(/'/g, '&apos;')}')"><i class="fas fa-paper-plane"></i> Easy Apply</button>`}<button class="btn btn-o btn-sm" onclick="this.innerHTML='<i class=&quot;fas fa-bookmark&quot;></i> Saved';toast('Saved!')"><i class="far fa-bookmark"></i> Save</button></div></div></div>`).join('');
+}
+function filJobs() { const q = document.getElementById('jq').value.toLowerCase(); const t = document.getElementById('jt').value; document.getElementById('jlist').innerHTML = rJobList((window._jd || []).filter(j => (!q || (j.title + j.company + (j.description || '')).toLowerCase().includes(q)) && (!t || j.job_type === t))); }
+function showApply(id, title) {
+  showModal(`<h2 style="margin-bottom:16px">Apply: ${title}</h2><div class="fg"><label>Cover Letter (optional)</label><textarea id="cltxt" rows="5" placeholder="Why are you a great fit?"></textarea></div><button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="applyJob(${id})"><i class="fas fa-paper-plane"></i> Submit Application</button>`);
+}
+async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } closeModal(); toast('Applied! 🎉'); renderJobs(); }
+function showPostJob() {
+  showModal(`<h2 style="margin-bottom:16px">Post a Job</h2>
+    <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Engineer"></div><div class="fg"><label>Company *</label><input id="pjco" placeholder="Company name"></div></div>
+    <div class="frow"><div class="fg"><label>Location</label><input id="pjlo" placeholder="City or Remote"></div><div class="fg"><label>Type</label><select id="pjty"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
+    <div class="fg"><label>Salary Range</label><input id="pjsa" placeholder="12-18 LPA"></div>
+    <div class="fg"><label>Description</label><textarea id="pjde" rows="4" placeholder="Describe the role…"></textarea></div>
+    <div class="fg"><label>Requirements</label><textarea id="pjre" rows="3" placeholder="Skills and qualifications…"></textarea></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="saveJob()"><i class="fas fa-check"></i> Post Job</button>`);
+}
+async function saveJob() {
+  const b = { title: document.getElementById('pjti').value, company: document.getElementById('pjco').value, location: document.getElementById('pjlo').value, job_type: document.getElementById('pjty').value, salary_range: document.getElementById('pjsa').value, description: document.getElementById('pjde').value, requirements: document.getElementById('pjre').value };
+  if (!b.title || !b.company) { toast('Title and company required'); return; }
+  await api('/api/jobs', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Job posted!'); renderJobs();
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+(async () => {
+  if (localStorage.getItem('nxdark') === '1') document.body.classList.add('dark');
+  const resetToken = new URLSearchParams(window.location.search).get('reset');
+  if (resetToken) {
+    const check = await api('/api/auth/reset-password/' + resetToken);
+    document.getElementById('awrap').style.display = 'flex';
+    document.getElementById('appw').style.display = 'none';
+    if (check.valid) { renderAF('reset', resetToken); } else { renderAF('login'); document.getElementById('aerr').innerHTML = '<p style="color:#ef4444;font-size:13px">Reset link expired. Request a new one.</p>'; }
+    history.replaceState({}, '', '/');
+    return;
+  }
+  const saved = localStorage.getItem('nxtoken');
+  if (saved) {
+    token = saved;
+    try {
+      me = await api('/api/users/me');
+      if (me && me.id) {
+        document.getElementById('awrap').style.display = 'none';
+        document.getElementById('appw').style.display = 'flex';
+        if (me.is_dark_mode) document.body.classList.add('dark');
+        clearInterval(window._badgeTimer);
+        initSocket(); go('home'); pollBadges(); window._badgeTimer = setInterval(pollBadges, 30000);
+        const avEl = document.getElementById('me-av-sm');
+        if (avEl && me) {
+          avEl.outerHTML = me.avatar_url
+            ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
+            : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
+        }
+      } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
+    } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
+  } else { showAuth(); }
+})();
+</script>
+</body>
+</html>
