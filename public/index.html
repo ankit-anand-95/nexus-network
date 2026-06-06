@@ -2204,7 +2204,6 @@ async function renderExperts() {
     const freeSlots = slots.filter(s => !s.booked).length;
     const totalSlots = slots.length;
     const slotInfo = totalSlots
-    const slotInfo = totalSlots
       ? `<p style="font-size:12px;color:${freeSlots ? '#22c55e' : '#ef4444'};margin:0 0 12px;font-weight:600">${freeSlots} of ${totalSlots} slot${totalSlots !== 1 ? 's' : ''} available</p>`
       : '<p style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>';
     const ratingHtml = e.rating > 0 ? `<p style="font-size:12px;color:#f59e0b;margin:0 0 4px">★ ${parseFloat(e.rating).toFixed(1)} <span style="color:var(--sub)">(${e.rating_count} review${e.rating_count !== 1 ? 's' : ''})</span></p>` : '';
