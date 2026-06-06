@@ -1137,17 +1137,16 @@ app.put('/api/sessions/:id', auth, (req, res) => {
         if (s) { s.booked = true; s.booked_by = session.learner_id; delete s.pending; delete s.pending_by; delete s.pending_until; return true; }
         return false;
       };
-      const msId = session.mentor_session_id;
-      if (msId) {
-        const ms = db.prepare('SELECT availability_slots FROM mentor_sessions WHERE id=?').get(msId);
-        if (ms) {
-          const slots = JSON.parse(ms.availability_slots || '[]');
-          if (_confirmSlot(slots)) {
-            db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(slots), msId);
-            io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: msId, slots });
-          }
+      // Scan ALL mentor_sessions for this expert by slot_key — handles both new sessions
+      // (mentor_session_id set) AND legacy bookings (mentor_session_id=NULL)
+      const allMs = db.prepare('SELECT id, availability_slots FROM mentor_sessions WHERE user_id=? AND is_active=1').all(session.expert_id);
+      allMs.forEach(ms => {
+        const slots = JSON.parse(ms.availability_slots || '[]');
+        if (_confirmSlot(slots)) {
+          db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(slots), ms.id);
+          io.emit('mentor_slot_booked', { expertId: session.expert_id, sessionId: ms.id, slots });
         }
-      }
+      });
     }
     createNotif(session.learner_id, session.expert_id, 'session_confirmed', session.id, expertUser.name + ' accepted your session request');
     io.to('user_' + session.learner_id).emit('session_update', { sessionId: session.id, status: 'confirmed' });

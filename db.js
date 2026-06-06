@@ -349,47 +349,49 @@ if (process.env.CLEAR_SESSIONS === '1') {
   console.log('[db] Reset complete — remove CLEAR_SESSIONS from Railway env vars now');
 }
 
-// ── SELF-HEALING SLOT SYNC ── Runs on every startup, no env var needed.
-// Cross-references interview_sessions against slot flags and fixes any stale booked/pending state.
-// Safe to run repeatedly — purely corrective, never deletes sessions.
+// ── SELF-HEALING SLOT SYNC — runs on every startup, no env var needed.
+// Cross-references interview_sessions against slot flags. Uses expert_id+slot_key
+// so legacy sessions (mentor_session_id=NULL) are also matched. Idempotent.
 (function healSlots() {
   try {
     let fixed = 0;
-    // Fix mentor_sessions slots
-    const msList = db.prepare(`SELECT id, user_id, availability_slots FROM mentor_sessions`).all();
+    // ── mentor_sessions ──────────────────────────────────────────────────
+    const msList = db.prepare('SELECT id, user_id, availability_slots FROM mentor_sessions').all();
     msList.forEach(ms => {
       const slots = JSON.parse(ms.availability_slots || '[]');
       let changed = false;
       slots.forEach(s => {
-        if (!s.booked && !s.pending) return; // already free — skip
-        // A slot should be booked only if there's a confirmed session for it
-        const confirmed = db.prepare(`SELECT id FROM interview_sessions WHERE mentor_session_id=? AND slot_key=? AND status='confirmed' LIMIT 1`).get(ms.id, s.key);
-        // A slot should be pending only if there's a pending session for it
-        const pending = db.prepare(`SELECT id FROM interview_sessions WHERE mentor_session_id=? AND slot_key=? AND status='pending' LIMIT 1`).get(ms.id, s.key);
-        const shouldBeBooked = !!confirmed;
+        // Query by expert_id+slot_key — covers both new (mentor_session_id set) and legacy (NULL)
+        const confirmed = db.prepare(`SELECT id, learner_id FROM interview_sessions WHERE expert_id=? AND slot_key=? AND status='confirmed' LIMIT 1`).get(ms.user_id, s.key);
+        const pending   = db.prepare(`SELECT id FROM interview_sessions WHERE expert_id=? AND slot_key=? AND status='pending' LIMIT 1`).get(ms.user_id, s.key);
+        const shouldBeBooked  = !!confirmed;
         const shouldBePending = !confirmed && !!pending;
         if (s.booked !== shouldBeBooked || !!s.pending !== shouldBePending) {
           s.booked = shouldBeBooked;
-          if (shouldBeBooked) { if (!s.booked_by && confirmed) s.booked_by = confirmed.learner_id; }
+          if (shouldBeBooked) { s.booked_by = confirmed.learner_id; }
           else { delete s.booked_by; }
           if (shouldBePending) { s.pending = true; }
           else { delete s.pending; delete s.pending_by; delete s.pending_until; }
           changed = true; fixed++;
         }
       });
-      if (changed) db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+      if (changed) db.prepare('UPDATE mentor_sessions SET availability_slots=? WHERE id=?').run(JSON.stringify(slots), ms.id);
     });
-    // Fix expert_profiles slots (legacy)
-    const epList = db.prepare(`SELECT user_id, availability_slots FROM expert_profiles`).all();
+    // ── expert_profiles (legacy) ──────────────────────────────────────────
+    const epList = db.prepare('SELECT user_id, availability_slots FROM expert_profiles').all();
     epList.forEach(ep => {
       const slots = JSON.parse(ep.availability_slots || '[]');
       let changed = false;
       slots.forEach(s => {
-        if (!s.booked && !s.pending) return;
         const active = db.prepare(`SELECT id FROM interview_sessions WHERE expert_id=? AND slot_key=? AND status IN ('pending','confirmed') LIMIT 1`).get(ep.user_id, s.key);
-        if (!active) { s.booked = false; delete s.booked_by; delete s.pending; delete s.pending_by; delete s.pending_until; changed = true; fixed++; }
+        const shouldBeBooked = !!(db.prepare(`SELECT id FROM interview_sessions WHERE expert_id=? AND slot_key=? AND status='confirmed' LIMIT 1`).get(ep.user_id, s.key));
+        if (s.booked !== shouldBeBooked) {
+          s.booked = shouldBeBooked;
+          if (!shouldBeBooked) { delete s.booked_by; delete s.pending; delete s.pending_by; delete s.pending_until; }
+          changed = true; fixed++;
+        }
       });
-      if (changed) db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), ep.user_id);
+      if (changed) db.prepare('UPDATE expert_profiles SET availability_slots=? WHERE user_id=?').run(JSON.stringify(slots), ep.user_id);
     });
     if (fixed > 0) console.log('[db] Self-heal: corrected ' + fixed + ' stale slot(s)');
   } catch(e) { console.error('[db] Self-heal error:', e.message); }
