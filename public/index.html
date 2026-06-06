@@ -1947,81 +1947,185 @@ async function saveRev() {
 }
 
 // ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
-async function renderExperts() {
-  const [d, myProfile] = await Promise.all([api('/api/experts'), api('/api/experts/me')]);
-  const isMentor = myProfile && myProfile.user_id;
+const _STC = { pending:'#f59e0b', confirmed:'#22c55e', completed:'#6b7280', cancelled:'#ef4444' };
+const _STL = { pending:'⏳ Pending', confirmed:'✅ Confirmed', completed:'✔ Completed', cancelled:'✖ Cancelled' };
+function _fmtSlot(iso) {
+  if (!iso) return 'TBD';
+  const d = new Date(iso);
+  return d.toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+}
 
-  // Build "My Mentorship Dashboard" section if user is a mentor
-  let dashHtml = '';
+async function renderExperts() {
+  const [allExperts, myProfile, mySessions] = await Promise.all([
+    api('/api/experts'),
+    api('/api/experts/me'),
+    api('/api/sessions?role=learner').catch(() => [])
+  ]);
+  const isMentor = !!(myProfile && myProfile.user_id);
+
+  // ── My Mentorship Dashboard (mentor view) ─────────────────────────────
+  let mentorDash = '';
   if (isMentor) {
-    const sessions = await api('/api/sessions?role=expert').catch(() => []);
-    const sessArr = Array.isArray(sessions) ? sessions : [];
-    const statusColor = { pending:'#f59e0b', confirmed:'#22c55e', completed:'#6b7280', cancelled:'#ef4444' };
-    const statusLabel = { pending:'⏳ Pending', confirmed:'✅ Confirmed', completed:'✔ Completed', cancelled:'✖ Cancelled' };
-    const sessRows = sessArr.length ? sessArr.map(s => {
-      const dt = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'TBD';
-      const col = statusColor[s.status] || '#6b7280';
-      const lbl = statusLabel[s.status] || s.status;
-      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
-        ${av({name:s.learner_name,avatar_url:s.learner_avatar},'av40')}
+    const expSess = await api('/api/sessions?role=expert').catch(() => []);
+    const ea = Array.isArray(expSess) ? expSess : [];
+    const pendingCount = ea.filter(s => s.status === 'pending').length;
+    const expertiseStr = Array.isArray(myProfile.expertise) ? myProfile.expertise.join(', ') : (myProfile.expertise || '');
+    const sessRows = ea.length ? ea.map(s => `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        ${av({ name: s.learner_name, avatar_url: s.learner_avatar }, 'av40')}
         <div style="flex:1;min-width:0">
-          <p style="margin:0 0 2px;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.learner_name||'Learner')}</p>
-          <p style="margin:0;font-size:12px;color:var(--sub)">${escHtml(s.topic||s.session_type||'')} &bull; ${dt}</p>
+          <p style="margin:0 0 2px;font-size:13px;font-weight:700">${escHtml(s.learner_name || 'Learner')}</p>
+          <p style="margin:0;font-size:12px;color:var(--sub)">${escHtml(s.session_type || '')} &bull; ${_fmtSlot(s.scheduled_at)}</p>
         </div>
-        <span style="font-size:11px;font-weight:700;color:${col};white-space:nowrap">${lbl}</span>
-        ${s.status==='pending' ? `<div style="display:flex;gap:6px;flex-shrink:0">
+        <span style="font-size:11px;font-weight:700;color:${_STC[s.status] || '#6b7280'};white-space:nowrap">${_STL[s.status] || s.status}</span>
+        ${s.status === 'pending' ? `<div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn btn-sm" style="background:#dcfce7;color:#16a34a;border:1.5px solid #bbf7d0" onclick="respondSession(${s.id},'confirmed')"><i class="fas fa-check"></i> Accept</button>
           <button class="btn btn-sm" style="background:#fef2f2;color:#ef4444;border:1.5px solid #fecaca" onclick="respondSession(${s.id},'cancelled')"><i class="fas fa-times"></i> Decline</button>
         </div>` : ''}
-      </div>`;
-    }).join('') : `<div style="padding:24px;text-align:center;color:var(--sub);font-size:13px"><i class="fas fa-inbox" style="font-size:28px;opacity:.4;display:block;margin-bottom:8px"></i>No bookings yet</div>`;
-    const expertiseStr = Array.isArray(myProfile.expertise) ? myProfile.expertise.join(', ') : (myProfile.expertise||'');
-    dashHtml = `<div class="card" style="margin-bottom:20px">
+        ${s.status === 'confirmed' && s.meeting_link ? `<a href="${s.meeting_link}" target="_blank" class="btn btn-o btn-sm"><i class="fas fa-video"></i> Join</a>` : ''}
+      </div>`).join('') : `<div style="padding:24px;text-align:center;color:var(--sub);font-size:13px"><i class="fas fa-inbox" style="font-size:28px;opacity:.4;display:block;margin-bottom:8px"></i>No bookings yet</div>`;
+    mentorDash = `<div class="card" style="margin-bottom:20px">
       <div class="ch" style="display:flex;align-items:center;justify-content:space-between">
-        <span>🎓 My Mentorship</span>
-        <button class="btn btn-o btn-sm" onclick="showExpertForm()"><i class="fas fa-pen"></i> Edit Profile</button>
+        <span>🎓 My Mentorship <span style="background:var(--primary);color:#fff;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px;font-weight:700">${ea.length}</span></span>
+        <div style="display:flex;gap:8px"><button class="btn btn-o btn-sm" onclick="showExpertForm()"><i class="fas fa-pen"></i> Edit Profile</button></div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)">
-        ${av(me,'av48')}
+        ${av(me, 'av48')}
         <div>
-          <p style="margin:0 0 2px;font-weight:700;font-size:14px">${escHtml(me.name||'')}</p>
-          <p style="margin:0;font-size:12px;color:var(--primary)">${escHtml(expertiseStr)}</p>
-          <p style="margin:0;font-size:12px;color:var(--sub)">₹${myProfile.price_per_session||0}/session &bull; ${sessArr.filter(s=>s.status==='pending').length} pending request${sessArr.filter(s=>s.status==='pending').length!==1?'s':''}</p>
+          <p style="margin:0 0 2px;font-weight:700;font-size:14px">${escHtml(me.name || '')}</p>
+          <p style="margin:0;font-size:12px;color:var(--primary);font-weight:600">${escHtml(expertiseStr)}</p>
+          <p style="margin:0;font-size:12px;color:var(--sub)">₹${myProfile.price_per_session || 0}/session &bull; ${pendingCount > 0 ? `<strong style="color:#f59e0b">${pendingCount} pending request${pendingCount !== 1 ? 's' : ''}</strong>` : 'No pending requests'}</p>
         </div>
       </div>
       <div>${sessRows}</div>
     </div>`;
   }
 
-  // Build cards for other mentors
-  const others = Array.isArray(d) ? d.filter(e => e.user_id != me?.id) : [];
-  const cards = others.length ? others.map(e => {
+  // ── My Booked Sessions (learner view) ─────────────────────────────────
+  const lsArr = Array.isArray(mySessions) ? mySessions : [];
+  let learnerSessions = '';
+  if (lsArr.length) {
+    const rows = lsArr.map(s => {
+      const canAct = ['pending', 'confirmed'].includes(s.status);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        ${av({ name: s.expert_name, avatar_url: s.expert_avatar }, 'av40')}
+        <div style="flex:1;min-width:0">
+          <p style="margin:0 0 2px;font-size:13px;font-weight:700">${escHtml(s.expert_name || 'Mentor')}</p>
+          <p style="margin:0;font-size:12px;color:var(--sub)">${escHtml(s.session_type || 'Mentorship')} &bull; ${_fmtSlot(s.scheduled_at)}</p>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${_STC[s.status] || '#6b7280'};white-space:nowrap">${_STL[s.status] || s.status}</span>
+        ${s.status === 'confirmed' && s.meeting_link ? `<a href="${s.meeting_link}" target="_blank" class="btn btn-p btn-sm"><i class="fas fa-video"></i> Join</a>` : ''}
+        ${canAct ? `<button class="btn btn-o btn-sm" onclick="rescheduleSession(${s.id},${s.expert_id},'${escHtml(s.expert_name||'Mentor').replace(/'/g,"\\'")}')"><i class="fas fa-calendar-alt"></i> Reschedule</button>` : ''}
+        ${canAct ? `<button class="btn btn-sm" style="background:#fef2f2;color:#ef4444;border:1.5px solid #fecaca" onclick="cancelSession(${s.id})"><i class="fas fa-times"></i> Cancel</button>` : ''}
+      </div>`;
+    }).join('');
+    learnerSessions = `<div class="card" style="margin-bottom:20px">
+      <div class="ch">📅 My Sessions <span style="background:var(--primary);color:#fff;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px;font-weight:700">${lsArr.length}</span></div>
+      ${rows}
+    </div>`;
+  }
+
+  // ── Available Mentors (exclude self + fully-booked) ────────────────────
+  const others = Array.isArray(allExperts) ? allExperts.filter(e => e.user_id != me?.id) : [];
+  const available = [], fullyBooked = [];
+  others.forEach(e => {
+    const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
+    const hasSlots = slots.length > 0;
+    const hasFree = slots.some(s => !s.booked);
+    if (!hasSlots || hasFree) available.push(e);
+    else fullyBooked.push(e);
+  });
+
+  const _mentorCard = (e, bookable) => {
     const expertiseStr = Array.isArray(e.expertise) ? e.expertise.join(', ') : (e.expertise || '');
     const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
     const freeSlots = slots.filter(s => !s.booked).length;
     const totalSlots = slots.length;
+    const slotInfo = totalSlots
+      ? `<p style="font-size:12px;color:${freeSlots ? '#22c55e' : '#ef4444'};margin:0 0 12px;font-weight:600">${freeSlots} of ${totalSlots} slot${totalSlots !== 1 ? 's' : ''} available</p>`
+      : '<p style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>';
+    const ratingHtml = e.rating > 0 ? `<p style="font-size:12px;color:#f59e0b;margin:0 0 4px">★ ${parseFloat(e.rating).toFixed(1)} <span style="color:var(--sub)">(${e.rating_count} review${e.rating_count !== 1 ? 's' : ''})</span></p>` : '';
     return `<div class="card" style="padding:20px;text-align:center" data-expert="${e.user_id}">
       ${av({ name: e.name, avatar_url: e.avatar_url }, 'av56')}
       <h4 style="margin:10px 0 2px;font-size:15px">${escHtml(e.name || 'Mentor')}</h4>
-      <p style="font-size:12px;color:var(--sub);margin:0 0 6px">${escHtml(e.headline || '')}</p>
-      <p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 4px">${escHtml(expertiseStr)}</p>
+      <p style="font-size:12px;color:var(--sub);margin:0 0 4px">${escHtml(e.headline || '')}</p>
+      <p style="font-size:12px;color:var(--primary);font-weight:600;margin:0 0 2px">${escHtml(expertiseStr)}</p>
+      ${ratingHtml}
       <p style="font-size:13px;font-weight:700;color:var(--primary);margin:0 0 4px">₹${e.price_per_session || 0}<span style="font-weight:400;color:var(--sub);font-size:12px">/session</span></p>
-      ${totalSlots ? `<p class="slot-count" style="font-size:12px;color:${freeSlots?'#22c55e':'#ef4444'};margin:0 0 12px">${freeSlots} of ${totalSlots} slots available</p>` : '<p class="slot-count" style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>'}
-      <button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name||'Mentor')}')"><i class="fas fa-video"></i> Book Session</button>
+      ${slotInfo}
+      ${bookable
+        ? `<button class="btn btn-p btn-sm" style="width:100%;justify-content:center" onclick="bookSession(${e.user_id},'${escHtml(e.name || 'Mentor').replace(/'/g,"\\'")}')"><i class="fas fa-video"></i> Book Session</button>`
+        : `<button class="btn btn-g btn-sm" style="width:100%;justify-content:center" disabled><i class="fas fa-calendar-times"></i> Fully Booked</button>`}
     </div>`;
-  }).join('') : `<div class="card empty" style="text-align:center;padding:40px;grid-column:1/-1"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No other mentors yet</p></div>`;
+  };
+
+  const availCards = available.length
+    ? available.map(e => _mentorCard(e, true)).join('')
+    : `<div class="card empty" style="text-align:center;padding:40px;grid-column:1/-1"><i class="fas fa-chalkboard-teacher" style="font-size:40px;opacity:.3;display:block;margin-bottom:12px"></i><p style="font-weight:600">No mentors with open slots right now</p><p style="color:var(--sub);font-size:13px">Check back later or ${isMentor ? 'add more slots to your profile' : 'offer your own mentorship!'}</p></div>`;
+  const bookedSection = fullyBooked.length
+    ? `<h3 style="font-size:13px;font-weight:700;color:var(--sub);margin:16px 0 10px;text-transform:uppercase;letter-spacing:.5px">Fully Booked</h3><div class="sug-grid">${fullyBooked.map(e => _mentorCard(e, false)).join('')}</div>`
+    : '';
 
   document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
-    <div class="phdr"><h1>🎓 Mock Interviews & Mentors</h1>${!isMentor ? '<button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button>' : ''}</div>
-    ${dashHtml}
-    ${others.length || !isMentor ? `<h3 style="font-size:14px;font-weight:700;color:var(--sub);margin:0 0 12px;text-transform:uppercase;letter-spacing:.5px">Available Mentors</h3><div class="sug-grid">${cards}</div>` : ''}
+    <div class="phdr">
+      <h1>🎓 Mentors & Sessions</h1>
+      ${!isMentor ? '<button class="btn btn-p" onclick="showExpertForm()"><i class="fas fa-plus"></i> Offer Mentoring</button>' : ''}
+    </div>
+    ${mentorDash}
+    ${learnerSessions}
+    ${(available.length || fullyBooked.length || !isMentor) ? `<h3 style="font-size:13px;font-weight:700;color:var(--sub);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Available Mentors</h3><div class="sug-grid">${availCards}</div>${bookedSection}` : ''}
   </div>`;
 }
+
 async function respondSession(id, status) {
-  const r = await api('/api/sessions/' + id, { method:'PUT', body: JSON.stringify({ status }) });
+  const r = await api('/api/sessions/' + id, { method: 'PUT', body: JSON.stringify({ status }) });
   if (r.error) { toast('Error: ' + r.error); return; }
-  toast(status === 'confirmed' ? 'Session accepted! ✅' : 'Session declined.');
-  apiInvalidate('/api/sessions');
+  if (status === 'confirmed') toast('Session accepted! Learner has been notified. ✅');
+  else toast('Session declined. Slot is now open again.');
+  apiInvalidate('/api/sessions'); apiInvalidate('/api/experts');
+  renderExperts();
+}
+
+async function cancelSession(id) {
+  if (!confirm('Cancel this session? The slot will be freed up and the mentor notified.')) return;
+  const r = await api('/api/sessions/' + id, { method: 'DELETE' });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  apiInvalidate('/api/sessions'); apiInvalidate('/api/experts');
+  toast('Session cancelled. The slot is now available again.');
+  renderExperts();
+}
+
+async function rescheduleSession(id, expertId, expertName) {
+  const experts = await api('/api/experts');
+  const e = Array.isArray(experts) ? experts.find(x => x.user_id == expertId) : null;
+  const freeSlots = (Array.isArray(e?.availability_slots) ? e.availability_slots : []).filter(s => !s.booked);
+  if (!freeSlots.length) {
+    showModal(`<div style="text-align:center;padding:20px 0">
+      <i class="fas fa-calendar-times" style="font-size:40px;color:#ef4444;margin-bottom:12px;display:block"></i>
+      <h3>No other slots available</h3>
+      <p style="color:var(--sub);font-size:13px">${escHtml(expertName)} has no other open slots. You can cancel and rebook later when new slots open up.</p>
+      <button class="btn btn-o" style="margin-top:12px" onclick="closeModal()">OK</button>
+    </div>`);
+    return;
+  }
+  const slotRows = freeSlots.map(s => {
+    const dt = new Date(s.key).toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:var(--r-sm);background:var(--indigo-light);border:1px solid var(--border);margin-bottom:8px;cursor:pointer" onclick="confirmReschedule(${id},'${s.key}','${escHtml(expertName).replace(/'/g,"\\'")}')">
+      <span style="font-size:13px;font-weight:600">${dt}</span>
+      <span class="btn btn-p btn-sm" style="pointer-events:none">Select</span>
+    </div>`;
+  }).join('');
+  showModal(`<h2 style="margin-bottom:4px"><i class="fas fa-calendar-alt" style="color:var(--primary);margin-right:8px"></i>Reschedule Session</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Pick a new slot with ${escHtml(expertName)}. The session will go back to pending and the mentor will be notified.</p>
+    <div style="max-height:320px;overflow-y:auto">${slotRows}</div>`);
+}
+
+async function confirmReschedule(sessionId, newSlotKey, expertName) {
+  const r = await api('/api/sessions/' + sessionId + '/reschedule', { method: 'PATCH', body: JSON.stringify({ new_slot_key: newSlotKey }) });
+  if (r.error) { toast('Error: ' + r.error); return; }
+  closeModal();
+  apiInvalidate('/api/sessions'); apiInvalidate('/api/experts');
+  toast(`Rescheduled! ${expertName} has been notified to confirm. ✅`);
   renderExperts();
 }
 async function bookSession(expertId, expertName) {
@@ -2053,22 +2157,19 @@ async function bookSession(expertId, expertName) {
 async function confirmBookSlot(expertId, slotKey, expertName, meetingLink) {
   const r = await api(`/api/experts/${expertId}/book-slot`, { method:'POST', body: JSON.stringify({ slotKey }) });
   if (r.error) { toast('Error: ' + r.error); return; }
+  apiInvalidate('/api/experts'); apiInvalidate('/api/sessions');
   closeModal();
-  const link = r.meeting_link || meetingLink;
-  if (link) {
-    showModal(`<div style="text-align:center;padding:12px 0">
-      <div style="font-size:48px;margin-bottom:12px">🎉</div>
-      <h2 style="margin-bottom:8px">Session Booked!</h2>
-      <p style="font-size:13px;color:var(--sub);margin-bottom:20px">You're booked with ${escHtml(expertName)}. Join using the link below.</p>
-      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:14px;margin-bottom:16px;word-break:break-all;font-size:13px">
-        <i class="fas fa-video" style="color:var(--primary);margin-right:8px"></i><a href="${link}" target="_blank" style="color:var(--primary)">${link}</a>
-      </div>
-      <a href="${link}" target="_blank" class="btn btn-p" style="width:100%;justify-content:center"><i class="fas fa-external-link-alt"></i> Join Meeting Now</a>
-    </div>`);
-  } else {
-    toast('Session booked! 🎉 The mentor will share a meeting link.');
-    renderExperts();
-  }
+  showModal(`<div style="text-align:center;padding:12px 0">
+    <div style="font-size:48px;margin-bottom:12px">📬</div>
+    <h2 style="margin-bottom:8px">Request Sent!</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:20px">${escHtml(expertName)} has been notified and will accept or decline your request. You'll get a notification once they respond.</p>
+    <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:14px;margin-bottom:16px;font-size:13px;text-align:left">
+      <p style="margin:0 0 6px;font-weight:700"><i class="fas fa-clock" style="color:var(--primary);margin-right:6px"></i>Slot: ${new Date(slotKey).toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
+      <p style="margin:0;color:var(--sub)">Status: <strong style="color:#f59e0b">⏳ Pending approval</strong></p>
+    </div>
+    <p style="font-size:12px;color:var(--sub);margin-bottom:16px">You can view, reschedule, or cancel in <strong>My Sessions</strong> on this page.</p>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="closeModal();renderExperts()"><i class="fas fa-check"></i> Got it</button>
+  </div>`);
 }
 async function showExpertForm() {
   const existing = await api('/api/experts/me');

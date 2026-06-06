@@ -295,6 +295,7 @@ const migrations = [
   `ALTER TABLE users ADD COLUMN warnings INTEGER DEFAULT 0`,
   `ALTER TABLE users ADD COLUMN blocked_until DATETIME DEFAULT NULL`,
   `ALTER TABLE users ADD COLUMN is_disabled INTEGER DEFAULT 0`,
+  `ALTER TABLE interview_sessions ADD COLUMN slot_key TEXT DEFAULT ''`,
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 

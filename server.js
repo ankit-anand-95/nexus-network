@@ -890,26 +890,29 @@ app.post('/api/experts/me', auth, (req, res) => {
 
 // Book a specific availability slot
 app.post('/api/experts/:expertId/book-slot', auth, (req, res) => {
-  const { slotKey } = req.body; // e.g. "2024-01-15T10:00"
-  const expert = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(req.params.expertId);
+  const { slotKey } = req.body;
+  const expertId = parseInt(req.params.expertId);
+  const expert = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(expertId);
   if (!expert) return res.status(404).json({ error: 'Expert not found' });
+  if (expertId === req.user.id) return res.status(400).json({ error: 'Cannot book your own session' });
   const slots = JSON.parse(expert.availability_slots || '[]');
   const slot = slots.find(s => s.key === slotKey);
   if (!slot) return res.status(404).json({ error: 'Slot not found' });
   if (slot.booked) return res.status(400).json({ error: 'Slot already booked' });
+  // Mark slot as reserved
   slot.booked = true; slot.booked_by = req.user.id;
-  db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), req.params.expertId);
+  db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), expertId);
+  // Create interview_sessions row (status=pending — awaiting mentor approval)
+  const sessionInfo = db.prepare(`INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+    .run(expertId, req.user.id, 'Mentorship Session', 'Mentorship', slotKey, 60, expert.meeting_link||'', expert.price_per_session||500, slotKey, 'pending');
   const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
   const _sd = new Date(slotKey);
   const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const _days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const readableSlot = `${_days[_sd.getUTCDay()]}, ${_sd.getUTCDate()} ${_months[_sd.getUTCMonth()]} ${_sd.getUTCFullYear()} at ${String(_sd.getUTCHours()).padStart(2,'0')}:${String(_sd.getUTCMinutes()).padStart(2,'0')} UTC`;
-  createNotif(parseInt(req.params.expertId), req.user.id, 'session_booked', 0, `${actor.name} booked a session with you on ${readableSlot}`);
-  // Real-time: update slot count on all clients
-  const freshRow = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(req.params.expertId);
-  const freshSlots = JSON.parse(freshRow?.availability_slots || '[]');
-  io.emit('mentor_slot_booked', { expertId: Number(req.params.expertId), slots: freshSlots });
-  res.json({ ok: true, meeting_link: expert.meeting_link });
+  const readableSlot = `${_days[_sd.getUTCDay()]}, ${_sd.getUTCDate()} ${_months[_sd.getUTCMonth()]} at ${String(_sd.getUTCHours()).padStart(2,'0')}:${String(_sd.getUTCMinutes()).padStart(2,'0')}`;
+  createNotif(expertId, req.user.id, 'session_booked', sessionInfo.lastInsertRowid, `${actor.name} requested a session on ${readableSlot} — please accept or decline`);
+  io.emit('mentor_slot_booked', { expertId, slots });
+  res.json({ ok: true, meeting_link: expert.meeting_link, session_id: sessionInfo.lastInsertRowid });
 });
 
 app.get('/api/sessions', auth, (req, res) => {
@@ -938,14 +941,97 @@ app.put('/api/sessions/:id', auth, (req, res) => {
   const { status, feedback, rating } = req.body;
   const session = db.prepare(`SELECT * FROM interview_sessions WHERE id=?`).get(req.params.id);
   if (!session) return res.status(404).json({ error: 'Not found' });
+  const isExpert = session.expert_id === req.user.id;
+  const isLearner = session.learner_id === req.user.id;
+  if (!isExpert && !isLearner) return res.status(403).json({ error: 'Forbidden' });
   db.prepare(`UPDATE interview_sessions SET status=COALESCE(?,status), feedback=COALESCE(?,feedback), rating=COALESCE(?,rating) WHERE id=?`)
-    .run(status, feedback, rating, req.params.id);
+    .run(status||null, feedback||null, rating||null, req.params.id);
+  const expertUser = db.prepare(`SELECT name FROM users WHERE id=?`).get(session.expert_id);
+  const learnerUser = db.prepare(`SELECT name FROM users WHERE id=?`).get(session.learner_id);
+  const _releaseSlot = () => {
+    if (!session.slot_key) return;
+    const ep = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
+    if (!ep) return;
+    const slots = JSON.parse(ep.availability_slots || '[]');
+    const s = slots.find(x => x.key === session.slot_key);
+    if (s) { s.booked = false; delete s.booked_by; }
+    db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
+    io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
+  };
+  if (status === 'confirmed') {
+    createNotif(session.learner_id, session.expert_id, 'session_confirmed', session.id, `${expertUser.name} accepted your session booking ✅`);
+    io.to(`user_${session.learner_id}`).emit('session_update', { sessionId: session.id, status: 'confirmed' });
+  } else if (status === 'cancelled') {
+    _releaseSlot();
+    if (isExpert) {
+      createNotif(session.learner_id, session.expert_id, 'session_declined', session.id, `${expertUser.name} declined your session request`);
+      io.to(`user_${session.learner_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled' });
+    } else {
+      createNotif(session.expert_id, session.learner_id, 'session_cancelled', session.id, `${learnerUser.name} cancelled their session`);
+      io.to(`user_${session.expert_id}`).emit('session_update', { sessionId: session.id, status: 'cancelled' });
+    }
+  }
   if (status === 'completed' && rating) {
     const ep = db.prepare(`SELECT rating, rating_count, total_sessions FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
-    const newCount = ep.rating_count + 1;
-    const newRating = ((ep.rating * ep.rating_count) + rating) / newCount;
+    const newCount = (ep.rating_count||0) + 1;
+    const newRating = ((ep.rating||0) * (ep.rating_count||0) + rating) / newCount;
     db.prepare(`UPDATE expert_profiles SET rating=?, rating_count=?, total_sessions=total_sessions+1 WHERE user_id=?`).run(newRating.toFixed(1), newCount, session.expert_id);
   }
+  res.json({ ok: true });
+});
+
+// Learner cancels a session
+app.delete('/api/sessions/:id', auth, (req, res) => {
+  const session = db.prepare(`SELECT * FROM interview_sessions WHERE id=?`).get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Not found' });
+  if (session.learner_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  if (session.status === 'completed') return res.status(400).json({ error: 'Cannot cancel a completed session' });
+  // Release slot
+  if (session.slot_key) {
+    const ep = db.prepare(`SELECT availability_slots FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
+    if (ep) {
+      const slots = JSON.parse(ep.availability_slots || '[]');
+      const s = slots.find(x => x.key === session.slot_key);
+      if (s) { s.booked = false; delete s.booked_by; }
+      db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
+      io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
+    }
+  }
+  db.prepare(`UPDATE interview_sessions SET status='cancelled' WHERE id=?`).run(session.id);
+  const learner = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
+  createNotif(session.expert_id, req.user.id, 'session_cancelled', session.id, `${learner.name} cancelled their session booking`);
+  res.json({ ok: true });
+});
+
+// Learner reschedules a session
+app.patch('/api/sessions/:id/reschedule', auth, (req, res) => {
+  const { new_slot_key } = req.body;
+  const session = db.prepare(`SELECT * FROM interview_sessions WHERE id=?`).get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Not found' });
+  if (session.learner_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  if (['completed','cancelled'].includes(session.status)) return res.status(400).json({ error: 'Cannot reschedule this session' });
+  const ep = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(session.expert_id);
+  if (!ep) return res.status(404).json({ error: 'Expert not found' });
+  const slots = JSON.parse(ep.availability_slots || '[]');
+  const newSlot = slots.find(s => s.key === new_slot_key);
+  if (!newSlot) return res.status(404).json({ error: 'Slot not found' });
+  if (newSlot.booked) return res.status(400).json({ error: 'That slot is already booked' });
+  // Release old slot
+  if (session.slot_key) {
+    const old = slots.find(s => s.key === session.slot_key);
+    if (old) { old.booked = false; delete old.booked_by; }
+  }
+  // Reserve new slot
+  newSlot.booked = true; newSlot.booked_by = req.user.id;
+  db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), session.expert_id);
+  db.prepare(`UPDATE interview_sessions SET scheduled_at=?, slot_key=?, status='pending' WHERE id=?`).run(new_slot_key, new_slot_key, session.id);
+  const learner = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
+  const _sd = new Date(new_slot_key);
+  const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const readableSlot = `${_days[_sd.getUTCDay()]}, ${_sd.getUTCDate()} ${_months[_sd.getUTCMonth()]} at ${String(_sd.getUTCHours()).padStart(2,'0')}:${String(_sd.getUTCMinutes()).padStart(2,'0')}`;
+  createNotif(session.expert_id, req.user.id, 'session_rescheduled', session.id, `${learner.name} rescheduled their session to ${readableSlot} — please confirm`);
+  io.emit('mentor_slot_booked', { expertId: session.expert_id, slots });
   res.json({ ok: true });
 });
 
