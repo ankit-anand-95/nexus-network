@@ -2406,19 +2406,28 @@ async function showAddSlot() {
 }
 function _renderSlotModal() {
   let modal = document.querySelector('#mbg .modal');
+  // Save scroll position before rebuild
+  const prevScroll = (document.getElementById('slot-day-scroll') || {}).scrollLeft || 0;
   if (!modal) {
     showModal(_buildSlotPickerHTML());
   } else {
     modal.innerHTML = '<button class="mclose" onclick="closeModal()">&#10005;</button>' + _buildSlotPickerHTML();
   }
+  // Restore scroll position after rebuild
+  const sc = document.getElementById('slot-day-scroll');
+  if (sc) sc.scrollLeft = prevScroll;
+}
+// Helper: get local YYYY-MM-DD from a Date object
+function _localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function _buildSlotPickerHTML() {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = _localDateStr(now);
   const days = []; const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  for (let i=0; i<21; i++) { const d=new Date(now); d.setDate(d.getDate()+i); days.push(d); }
+  for (let i=0; i<30; i++) { const d=new Date(now); d.setDate(d.getDate()+i); days.push(d); }
   const dayChips = days.map((d,i) => {
-    const val = d.toISOString().split('T')[0];
+    const val = _localDateStr(d);  // use LOCAL date, not UTC
     const sel = window._slotDate === val;
     const lbl = i===0 ? 'Today' : DAYS[d.getDay()];
     return `<button onclick="_spDate('${val}')" style="flex-shrink:0;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid ${sel?'var(--primary)':'var(--border)'};background:${sel?'var(--primary)':'var(--inp)'};color:${sel?'#fff':'var(--text)'};cursor:pointer;text-align:center;min-width:56px;transition:.1s">
@@ -2430,10 +2439,16 @@ function _buildSlotPickerHTML() {
   const hours = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
   const timeGrid = hours.map(h => {
     const label = h<12?`${h}:00 AM`:h===12?'12:00 PM':`${h-12}:00 PM`;
-    const isPast = window._slotDate && (() => { const t=new Date(`${window._slotDate}T${String(h).padStart(2,'0')}:00:00`); return t<=now; })();
+    // isPast: construct local date+time for comparison
+    const isPast = window._slotDate && (() => {
+      const [y,mo,dy] = window._slotDate.split('-').map(Number);
+      const t = new Date(y, mo-1, dy, h, 0, 0);
+      return t <= now;
+    })();
+    // existing: match by LOCAL date string + LOCAL hour (avoid UTC/startsWith bug)
     const existing = window._slotDate && window._exSlots.find(s => {
       const sd = new Date(s.key);
-      return s.key.startsWith(window._slotDate) || (sd.getFullYear()===new Date(window._slotDate).getFullYear() && sd.getMonth()===new Date(window._slotDate).getMonth() && sd.getDate()===new Date(window._slotDate).getDate() && sd.getHours()===h);
+      return _localDateStr(sd) === window._slotDate && sd.getHours() === h;
     });
     const disabled = !window._slotDate || isPast || !!existing;
     const sel = window._slotHour === h;
@@ -2449,9 +2464,11 @@ function _buildSlotPickerHTML() {
     </button>`;
   }).join('');
 
-  const selISO = window._slotDate && window._slotHour!==null
-    ? (() => { const d=new Date(`${window._slotDate}T${String(window._slotHour).padStart(2,'0')}:00:00`); return d.toISOString(); })()
+  // Build slot key as a plain local-time string (no UTC conversion) to avoid timezone shift
+  const selKey = window._slotDate && window._slotHour !== null
+    ? `${window._slotDate}T${String(window._slotHour).padStart(2,'0')}:00:00`
     : null;
+  const selISO = selKey;
 
   const slotList = window._exSlots.length
     ? window._exSlots.map(s => {
@@ -2466,7 +2483,7 @@ function _buildSlotPickerHTML() {
 
   return `<h2 style="margin-bottom:4px"><i class="fas fa-calendar-plus" style="color:var(--primary);margin-right:8px"></i>Add Availability Slots</h2>
     <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Pick dates and times when you're free for sessions</p>
-    <div style="overflow-x:auto;display:flex;gap:6px;padding-bottom:8px;margin-bottom:14px">${dayChips}</div>
+    <div id="slot-day-scroll" style="overflow-x:auto;display:flex;gap:6px;padding-bottom:8px;margin-bottom:14px">${dayChips}</div>
     <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">${window._slotDate?'Pick a time':'↑ Pick a date first'}</p>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">${timeGrid}</div>
     ${selISO?`<div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
