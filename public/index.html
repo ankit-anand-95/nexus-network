@@ -558,8 +558,9 @@ let me = null, socket = null, postsData = [], curPage = 'home';
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
 const _apiCache = new Map();
-// Paths cached aggressively (2 min) — analytics, trending, suggestions
-const _LONG_CACHE = ['/api/trending', '/api/analytics/me', '/api/connections/suggestions', '/api/jobs', '/api/users/me'];
+// Paths cached aggressively (2 min) — suggestions, jobs, user profile only
+// analytics/me and trending use normal 30s cache so they stay fresh
+const _LONG_CACHE = ['/api/connections/suggestions', '/api/jobs', '/api/users/me'];
 const _SHORT_CACHE = 30000; // 30s for everything else GET
 const _LONG_TTL   = 120000; // 2min for slow/stable endpoints
 function _apiTTL(path) {
@@ -791,6 +792,8 @@ function initSocket() {
 
   // ── REAL-TIME FEED EVENTS ──────────────────────────────────────────────────
   socket.on('new_post', p => {
+    // New post: invalidate trending so right sidebar refreshes
+    apiInvalidate('/api/trending');
     if (curPage !== 'home') return;
     // Dedup: if this is our own recently submitted post, skip (already added locally)
     if (window._myRecentPosts?.has(p.id)) { window._myRecentPosts.delete(p.id); return; }
@@ -799,6 +802,8 @@ function initSocket() {
     const div = document.createElement('div');
     div.innerHTML = renderPost(p);
     feed.insertBefore(div.firstElementChild, feed.firstChild);
+    // Refresh right sidebar trending with slight delay (let server cache update)
+    setTimeout(() => { if (curPage === 'home') renderRightSidebar(); }, 1500);
   });
 
   socket.on('post_deleted', ({ postId }) => {
@@ -854,6 +859,26 @@ function initSocket() {
     const msgs = { confirmed: '✅ Your session was accepted!', cancelled: '❌ Your session was declined.' };
     if (msgs[status]) toast(msgs[status]);
     pollBadges();
+  });
+
+  // Real-time analytics — profile viewed or post engaged
+  socket.on('analytics_update', () => {
+    apiInvalidate('/api/analytics/me');
+    // Update left sidebar numbers
+    api('/api/analytics/me').then(a => {
+      if (!a) return;
+      const v = document.getElementById('sb-views'); if (v) v.textContent = a.profile_views ?? 0;
+      const i = document.getElementById('sb-impr'); if (i) i.textContent = a.post_impressions ?? 0;
+    });
+    // Update right sidebar if on home
+    if (curPage === 'home') {
+      const rsA = document.getElementById('rs-analytics');
+      if (rsA) api('/api/analytics/me').then(a => {
+        if (!a) return;
+        const v = rsA.querySelector('.stat-val[data-key="views"]'); if (v) v.textContent = a.profile_views ?? 0;
+        const i = rsA.querySelector('.stat-val[data-key="impr"]'); if (i) i.textContent = a.post_impressions ?? 0;
+      });
+    }
   });
 
   socket.on('post_reacted', ({ postId, reactions, my_reaction_by }) => {
@@ -931,6 +956,7 @@ function updatePresence(uid) {
 }
 async function refreshThreads() {
   const ml = document.getElementById('ml'); if (!ml) return;
+  apiInvalidate('/api/messages/threads'); // always fetch fresh on real-time update
   const th = await api('/api/messages/threads');
   if (!Array.isArray(th) || !th.length) return;
   ml.innerHTML = th.map(t => `<div class="mthread${t.id==achat?' active':''}" id="mt-${t.id}" onclick="openChat(${t.id},'${String(t.name).replace(/'/g,"&apos;")}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||''}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
@@ -1245,18 +1271,18 @@ async function renderRightSidebar() {
   // ── Step 1: render analytics immediately when it arrives (fast, server-cached) ──
   const analytics = await analyticsP;
   if (!document.getElementById('rs')) return; // navigated away
-  rsEl.innerHTML = `<div class="rs-card">
+  rsEl.innerHTML = `<div class="rs-card" id="rs-analytics">
     <div class="rs-hdr">Your Activity <span>Last 30 days</span></div>
-    <div class="stat-row" onclick="go('profile')">
+    <div class="stat-row" onclick="showAnalyticsModal()">
       <span class="stat-label"><i class="fas fa-eye" style="width:16px;color:var(--primary)"></i> Profile viewers</span>
-      <span class="stat-val">${analytics?.profile_views ?? 0}</span>
+      <span class="stat-val" data-key="views">${analytics?.profile_views ?? 0}</span>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" onclick="showAnalyticsModal()">
       <span class="stat-label"><i class="fas fa-chart-line" style="width:16px;color:var(--primary)"></i> Post impressions</span>
-      <span class="stat-val">${analytics?.post_impressions ?? 0}</span>
+      <span class="stat-val" data-key="impr">${analytics?.post_impressions ?? 0}</span>
     </div>
     <div style="padding:10px 16px">
-      <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-chart-bar"></i> View full analytics</button>
+      <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="showAnalyticsModal()"><i class="fas fa-chart-bar"></i> View full analytics</button>
     </div>
   </div>
   <div id="rs-trending"><div class="rs-card"><div class="skel skel-line w80" style="height:12px;margin-bottom:8px"></div><div class="skel skel-line w60" style="height:12px;margin-bottom:8px"></div><div class="skel skel-line w40" style="height:12px"></div></div></div>`;
@@ -1316,8 +1342,8 @@ async function renderSB() {
     </div>
     <div class="sb-stat" style="cursor:pointer" onclick="go('profile')"><span><i class="fas fa-users" style="color:var(--primary)"></i> Connections</span><span style="color:var(--primary);font-weight:700">${me.connections_count || 0}</span></div>
     <div id="sb-analytics" style="border-top:1px solid var(--border)">
-      <div class="sb-stat" style="cursor:pointer" onclick="renderRightSidebar()"><span style="font-size:12px"><i class="fas fa-eye" style="color:var(--primary)"></i> Profile viewers</span><span class="sb-aval" id="sb-views" style="color:var(--primary);font-weight:700">–</span></div>
-      <div class="sb-stat"><span style="font-size:12px"><i class="fas fa-chart-line" style="color:var(--primary)"></i> Post impressions</span><span id="sb-impr" style="color:var(--primary);font-weight:700">–</span></div>
+      <div class="sb-stat" style="cursor:pointer" onclick="showAnalyticsModal()"><span style="font-size:12px"><i class="fas fa-eye" style="color:var(--primary)"></i> Profile viewers</span><span class="sb-aval" id="sb-views" style="color:var(--primary);font-weight:700">–</span></div>
+      <div class="sb-stat" style="cursor:pointer" onclick="showAnalyticsModal()"><span style="font-size:12px"><i class="fas fa-chart-line" style="color:var(--primary)"></i> Post impressions</span><span id="sb-impr" style="color:var(--primary);font-weight:700">–</span></div>
     </div>
     ${me.skills?.length ? `<div style="padding:10px 16px;border-top:1px solid var(--border)"><p style="font-size:11px;font-weight:700;color:var(--sub);margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px">Skills</p><div style="display:flex;flex-wrap:wrap;gap:4px">${me.skills.slice(0,5).map(s=>`<span class="chip" style="font-size:10px;padding:2px 8px">${s}</span>`).join('')}${me.skills.length > 5 ? `<span style="font-size:11px;color:var(--sub);align-self:center">+${me.skills.length-5}</span>` : ''}</div></div>` : ''}
     <div style="padding:10px 16px;border-top:1px solid var(--border)">
@@ -2120,8 +2146,8 @@ async function renderExperts() {
       <div class="ch" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>🎓 My Mentorship <span style="background:var(--primary);color:#fff;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px;font-weight:700">${ea.length}</span></span>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" style="background:var(--indigo-light);color:var(--primary);border:1.5px solid var(--primary)" onclick="showAddSlot()"><i class="fas fa-calendar-plus"></i> Add Slot</button>
-          <button class="btn btn-o btn-sm" onclick="showExpertProfile()"><i class="fas fa-pen"></i> Edit Profile</button>
+          <button class="btn btn-sm" style="background:var(--indigo-light);color:var(--primary);border:1.5px solid var(--primary)" onclick="showAddSlot()"><i class="fas fa-calendar-plus"></i> Add Session</button>
+          <button class="btn btn-o btn-sm" onclick="showExpertProfile()"><i class="fas fa-pen"></i> Expert Settings</button>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)">
@@ -2177,6 +2203,7 @@ async function renderExperts() {
     const slots = Array.isArray(e.availability_slots) ? e.availability_slots : [];
     const freeSlots = slots.filter(s => !s.booked).length;
     const totalSlots = slots.length;
+    const slotInfo = totalSlots
     const slotInfo = totalSlots
       ? `<p style="font-size:12px;color:${freeSlots ? '#22c55e' : '#ef4444'};margin:0 0 12px;font-weight:600">${freeSlots} of ${totalSlots} slot${totalSlots !== 1 ? 's' : ''} available</p>`
       : '<p style="font-size:12px;color:var(--sub);margin:0 0 12px">Slots TBD</p>';
@@ -2308,6 +2335,30 @@ async function confirmBookSlot(expertId, slotKey, expertName, meetingLink) {
   </div>`);
 }
 // ── showExpertForm: first-time "Offer Mentoring" (no pre-fill) ──────────────
+// ── ANALYTICS MODAL ──────────────────────────────────────────────
+async function showAnalyticsModal() {
+  showModal(`<div style="text-align:center;padding:12px 0 4px"><i class="fas fa-circle-notch spin" style="font-size:28px;color:var(--primary)"></i><p style="color:var(--sub);font-size:13px;margin-top:8px">Loading…</p></div>`);
+  apiInvalidate('/api/analytics/me');
+  const a = await api('/api/analytics/me').catch(() => null);
+  const modal = document.querySelector('#mbg .modal'); if (!modal) return;
+  const posts = await api('/api/posts').catch(() => []);
+  const myPosts = Array.isArray(posts) ? posts.filter(p => p.is_mine) : [];
+  const topPosts = [...myPosts].sort((x,y)=>(y.likes_count||0)+(y.comments_count||0)-((x.likes_count||0)+(x.comments_count||0))).slice(0,5);
+  const rows = topPosts.length
+    ? topPosts.map(p => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--indigo-light);border-radius:var(--r-sm);margin-bottom:6px"><div style="flex:1;min-width:0;overflow:hidden"><p style="margin:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((p.content||'').substring(0,70))}</p></div><div style="display:flex;gap:10px;flex-shrink:0;font-size:12px;color:var(--sub)"><span><i class="fas fa-heart" style="color:#ef4444"></i> ${p.likes_count||0}</span><span><i class="fas fa-comment" style="color:var(--primary)"></i> ${p.comments_count||0}</span></div></div>`).join('')
+    : '<p style="color:var(--sub);font-size:13px;text-align:center;padding:8px 0">No posts yet.</p>';
+  modal.innerHTML = `<button class="mclose" onclick="closeModal()">&#10005;</button>
+    <h2 style="margin-bottom:4px"><i class="fas fa-chart-bar" style="color:var(--primary);margin-right:8px"></i>Your Analytics</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Last 30 days</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:16px;text-align:center"><div style="font-size:32px;font-weight:800;color:var(--primary)">${a?.profile_views??0}</div><div style="font-size:12px;color:var(--sub);margin-top:4px"><i class="fas fa-eye"></i> Profile Views</div></div>
+      <div style="background:var(--indigo-light);border-radius:var(--r-sm);padding:16px;text-align:center"><div style="font-size:32px;font-weight:800;color:var(--primary)">${a?.post_impressions??0}</div><div style="font-size:12px;color:var(--sub);margin-top:4px"><i class="fas fa-chart-line"></i> Post Impressions</div></div>
+    </div>
+    <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px">Top Posts</p>
+    <div style="max-height:220px;overflow-y:auto">${rows}</div>
+    <p style="font-size:11px;color:var(--sub);text-align:center;margin-top:14px">Updates in real-time as people view your profile and engage with posts.</p>`;
+}
+
 async function showExpertForm() {
   const existing = await api('/api/experts/me');
   // Pre-fill only if they already have a profile (editing), blank for new mentors
@@ -2355,10 +2406,12 @@ async function showAddSlot() {
   _renderSlotModal();
 }
 function _renderSlotModal() {
-  const modal = document.getElementById('modal');
-  if (!modal) return;
-  modal.innerHTML = _buildSlotPickerHTML();
-  document.getElementById('modal-bg').style.display = 'flex';
+  let modal = document.querySelector('#mbg .modal');
+  if (!modal) {
+    showModal(_buildSlotPickerHTML());
+  } else {
+    modal.innerHTML = '<button class="mclose" onclick="closeModal()">&#10005;</button>' + _buildSlotPickerHTML();
+  }
 }
 function _buildSlotPickerHTML() {
   const now = new Date();

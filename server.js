@@ -503,6 +503,12 @@ app.post('/api/posts/:id/react', auth, (req, res) => {
   const reactions = db.prepare(`SELECT reaction_type, COUNT(*) as count FROM post_reactions WHERE post_id=? GROUP BY reaction_type`).all(postId);
   const my_reaction = db.prepare(`SELECT reaction_type FROM post_reactions WHERE post_id=? AND user_id=?`).get(postId, req.user.id)?.reaction_type || null;
   io.emit('post_reacted', { postId: Number(postId), reactions, my_reaction_by: req.user.id, my_reaction });
+  // Notify post author that their post got engagement (post impressions update)
+  const reactedPost = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(postId);
+  if (reactedPost?.author_id && reactedPost.author_id !== req.user.id) {
+    _analyticsCache.delete(reactedPost.author_id);
+    io.to(`user_${reactedPost.author_id}`).emit('analytics_update', { type: 'post_reaction' });
+  }
   res.json({ reactions, my_reaction });
 });
 
@@ -551,7 +557,12 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
   db.prepare(`UPDATE posts SET comments_count = comments_count+1 WHERE id=?`).run(postId);
   const post = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(postId);
   const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  if (post && post.author_id !== req.user.id && actor) createNotif(post.author_id, req.user.id, 'comment', postId, `${actor.name} commented on your post`);
+  if (post && post.author_id !== req.user.id && actor) {
+    createNotif(post.author_id, req.user.id, 'comment', postId, `${actor.name} commented on your post`);
+    // Invalidate and push analytics update to post author
+    _analyticsCache.delete(post.author_id);
+    io.to(`user_${post.author_id}`).emit('analytics_update', { type: 'comment' });
+  }
   const newCount = db.prepare(`SELECT comments_count FROM posts WHERE id=?`).get(postId)?.comments_count ?? 0;
   // Broadcast updated comment count to all users
   io.emit('post_commented', { postId: Number(postId), comments_count: newCount });
@@ -1212,6 +1223,10 @@ app.post('/api/users/:id/view', auth, (req, res) => {
   if (profileId === req.user.id) return res.json({ ok: true });
   try {
     db.prepare('INSERT INTO profile_views (profile_id, viewer_id) VALUES (?, ?)').run(profileId, req.user.id);
+    // Invalidate server-side analytics cache for the profile owner
+    _analyticsCache.delete(profileId);
+    // Push real-time notification to the profile owner
+    io.to(`user_${profileId}`).emit('analytics_update', { type: 'profile_view' });
   } catch(e) {}
   res.json({ ok: true });
 });
@@ -1287,6 +1302,29 @@ app.get('/api/trending', auth, (req, res) => {
     LEFT JOIN users u ON p.author_id=u.id
     LEFT JOIN post_reactions pr ON pr.post_id=p.id
     LEFT JOIN comments c ON c.post_id=p.id
+    WHERE p.is_published=1 AND p.is_anonymous=0
+      AND p.created_at > datetime('now','-7 days')
+    GROUP BY p.id
+    ORDER BY reaction_count DESC, comment_count DESC
+    LIMIT 5
+  `).all();
+  const tagRows = db.prepare(`
+    SELECT content FROM posts
+    WHERE is_published=1 AND created_at > datetime('now','-7 days')
+    AND content LIKE '%#%'
+    LIMIT 500
+  `).all();
+  const tagCount = {};
+  tagRows.forEach(p => {
+    const tags = (p.content || '').match(/#[\w]+/g) || [];
+    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
+  });
+  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
+  _trendingCache = { top_posts: topPosts, trending_tags };
+  _trendingTs = Date.now();
+  res.json(_trendingCache);
+});
+_id=p.id
     WHERE p.is_published=1 AND p.is_anonymous=0
       AND p.created_at > datetime('now','-7 days')
     GROUP BY p.id
