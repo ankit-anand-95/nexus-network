@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Nexus — Professional Network</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -275,7 +275,7 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 .stat-row .stat-label{font-size:13px;color:var(--sub)}
 .stat-row .stat-val{font-size:14px;font-weight:700;color:var(--primary)}
 /* ── BOTTOM NAV (mobile) ─────────────────────────────────── */
-#bnav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--card);border-top:1px solid var(--border);z-index:100;justify-content:space-around;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+#bnav{display:none;position:fixed;bottom:0;left:0;right:0;height:auto;min-height:56px;padding-bottom:env(safe-area-inset-bottom,0px);background:var(--card);border-top:1px solid var(--border);z-index:100;justify-content:space-around;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
 #bnav button{display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;cursor:pointer;color:var(--sub);font-size:10px;font-weight:600;padding:5px 10px;border-radius:10px;position:relative;min-width:50px;transition:.12s}
 #bnav button.active,#bnav button:hover{color:var(--primary)}
 #bnav button i{font-size:21px}
@@ -316,7 +316,7 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   #mlay{grid-template-columns:1fr;height:calc(100dvh - 112px)}
   .mlist{height:100%;display:flex;flex-direction:column;overflow-y:auto}
   /* Chat panel: fixed, sits between top nav and bottom nav */
-  #ccol{position:fixed;top:56px;left:0;right:0;bottom:56px;background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
+  #ccol{position:fixed;top:56px;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
   #mlay.chat-open #ccol{display:flex}
   #mlay.chat-open .mlist{display:none}
   /* Keep bottom nav visible in chat for navigation */
@@ -402,6 +402,16 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 </style>
 </head>
 <body>
+<!-- Apply dark mode immediately to prevent flash of unstyled content -->
+<script>(function(){var s=localStorage.getItem('nxdark'),sys=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='1'||(s===null&&sys))document.body.classList.add('dark');})()</script>
+
+<!-- PAGE LOAD SPLASH -->
+<div id="nxload" style="position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .35s">
+  <div style="text-align:center">
+    <div style="width:52px;height:52px;border-radius:14px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:900;margin:0 auto 14px;box-shadow:0 4px 20px rgba(99,102,241,.4)">N</div>
+    <p style="color:var(--sub);font-size:13px;margin:0">Loading Nexus…</p>
+  </div>
+</div>
 
 <!-- AUTH WRAPPER -->
 <div id="awrap" style="display:none">
@@ -825,8 +835,8 @@ function renderAF(m, resetToken) {
     <p class="asub">${il ? 'Sign in to your professional network' : 'Build your professional presence'}</p>
     <div id="aerr"></div>
     ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" placeholder="Your full name"></div>' : ''}
-    <div class="fg"><label>Email</label><input id="ae" type="email" placeholder="you@example.com" autocomplete="email"></div>
-    <div class="fg"><label>Password</label><input id="ap" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
+    <div class="fg"><label>Email</label><input id="ae" type="email" name="email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="fg"><label>Password</label><input id="ap" type="password" name="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
     ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" placeholder="e.g. Software Engineer at Google"></div>' : ''}
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
     <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>
@@ -1024,11 +1034,11 @@ async function renderRightSidebar() {
     <div class="rs-hdr">Your Activity <span>Last 30 days</span></div>
     <div class="stat-row" onclick="go('profile')">
       <span class="stat-label"><i class="fas fa-eye" style="width:16px;color:var(--primary)"></i> Profile viewers</span>
-      <span class="stat-val">${analytics.profile_views}</span>
+      <span class="stat-val">${analytics?.profile_views ?? '–'}</span>
     </div>
     <div class="stat-row">
       <span class="stat-label"><i class="fas fa-chart-line" style="width:16px;color:var(--primary)"></i> Post impressions</span>
-      <span class="stat-val">${analytics.post_impressions}</span>
+      <span class="stat-val">${analytics?.post_impressions ?? '–'}</span>
     </div>
     <div style="padding:10px 16px">
       <button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="go('profile')"><i class="fas fa-chart-bar"></i> View full analytics</button>
@@ -1693,7 +1703,7 @@ async function renderSaved() {
 
 async function renderNotifs() {
   const n = await api('/api/notifications'); await api('/api/notifications/read-all', { method: 'PUT' }); updBadge('nbadge', 0);
-  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${x.content}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
+  document.getElementById('pr').innerHTML = `<div style="max-width:680px;margin:0 auto"><div class="card"><div class="ch">Notifications</div>${Array.isArray(n) && n.length ? n.map(x => `<div class="prow${x.is_read ? '' : ' unread'}" style="${x.is_read ? '' : 'background:var(--indigo-light)'}">${av({ name: x.actor_name, avatar_url: x.actor_avatar }, 'av40')}<div><p style="font-size:13px;margin:0 0 3px">${_fmtNotifContent(x.content)}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(x.created_at)}</time></div></div>`).join('') : '<div class="empty" style="padding:48px"><i class="fas fa-bell-slash" style="font-size:48px"></i><p>All caught up!</p></div>'}</div></div>`;
 }
 
 async function editSal(id) {
@@ -1973,9 +1983,11 @@ async function saveJob() {
             ? `<img src="${me.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:4px" id="me-av-sm">`
             : `<span id="me-av-sm" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-right:4px">${me.name[0]}</span>`;
         }
-      } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
-    } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); }
-  } else { showAuth(); }
+        // Remove splash screen after home renders
+        setTimeout(() => { const l=document.getElementById('nxload'); if(l){l.style.opacity='0';setTimeout(()=>l.remove(),350);} }, 350);
+      } else { localStorage.removeItem('nxtoken'); token = ''; showAuth(); document.getElementById('nxload')?.remove(); }
+    } catch(e) { localStorage.removeItem('nxtoken'); token = ''; showAuth(); document.getElementById('nxload')?.remove(); }
+  } else { showAuth(); document.getElementById('nxload')?.remove(); }
 })();
 </script>
 </body>
