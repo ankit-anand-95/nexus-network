@@ -326,11 +326,11 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   #mlay{grid-template-columns:1fr;height:calc(100dvh - 112px)}
   .mlist{height:100%;display:flex;flex-direction:column;overflow-y:auto}
   /* Chat panel: fixed, sits between top nav and bottom nav */
-  #ccol{position:fixed;top:56px;left:0;right:0;height:calc(100dvh - 112px - env(safe-area-inset-bottom,0px));background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
+  #ccol{position:fixed;top:56px;left:0;right:0;height:calc(100dvh - 56px - env(safe-area-inset-bottom,0px));background:var(--card);z-index:50;display:none;flex-direction:column;overflow:hidden}
   #mlay.chat-open #ccol{display:flex}
   #mlay.chat-open .mlist{display:none}
   /* Keep bottom nav visible in chat for navigation */
-  body.in-chat #bnav{display:flex}
+  body.in-chat #bnav{display:none}
   /* ── CHAT INTERNALS ── */
   #ctop{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-shrink:0;border-bottom:1px solid var(--border);flex-wrap:nowrap;min-height:52px}
   #ctop h3{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1131,10 +1131,12 @@ function setFeedSort(s) {
 
 async function renderRightSidebar() {
   const rsEl = document.getElementById('rs'); if (!rsEl) return;
-  rsEl.innerHTML = '<div class="rs-card"><div class="rs-hdr">Loading…</div></div>';
+  rsEl.innerHTML = `<div class="rs-card"><div class="skel skel-line w80" style="height:16px;margin-bottom:12px"></div><div class="skel skel-line w60" style="height:12px;margin-bottom:8px"></div><div class="skel skel-line w40" style="height:12px"></div></div>`;
+  const timeout = ms => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
+  const safe = (p, fb) => Promise.race([p, timeout(6000)]).catch(() => fb);
   const [trending, analytics] = await Promise.all([
-    api('/api/trending').catch(() => ({ top_posts:[], trending_tags:[] })),
-    api('/api/analytics/me').catch(() => ({ profile_views:0, post_impressions:0 }))
+    safe(api('/api/trending'), { top_posts:[], trending_tags:[] }),
+    safe(api('/api/analytics/me'), { profile_views:0, post_impressions:0 })
   ]);
 
   let html = '';
@@ -1732,27 +1734,16 @@ async function openChat(uid, name) {
   // Poll presence every 20s while chat is open (keeps indicator fresh)
   clearInterval(window._presTimer);
   window._presTimer = setInterval(() => { if (socket && achat) socket.emit('get_presence', { userId: achat }); }, 20000);
-  // Mobile keyboard: resize #ccol height to stay above keyboard
+  // Mobile: always size #ccol to match the visual viewport (handles keyboard open/close automatically)
   if (window.innerWidth <= 768) {
     const _adjustChat = () => {
       const ccol = document.getElementById('ccol'); if (!ccol || !achat) return;
-      const bnav = document.getElementById('bnav');
       const vp = window.visualViewport;
       const vpH = vp ? vp.height : window.innerHeight;
-      const keyboardH = Math.max(0, window.innerHeight - vpH);
-      if (keyboardH > 80) {
-        // Keyboard open: height = visual viewport - top nav (bnav hidden)
-        if (bnav) bnav.style.display = 'none';
-        ccol.style.height = (vpH - 56) + 'px';
-      } else {
-        // Keyboard closed: reset to CSS value
-        if (bnav) bnav.style.display = '';
-        ccol.style.height = '';
-      }
+      ccol.style.height = (vpH - 56) + 'px';
       const mb = document.getElementById('cmsgs');
       if (mb) setTimeout(() => mb.scrollTop = mb.scrollHeight, 50);
     };
-    // Remove old handlers
     if (window.visualViewport && window._vpHandler) {
       window.visualViewport.removeEventListener('resize', window._vpHandler);
       window.visualViewport.removeEventListener('scroll', window._vpHandler);
@@ -1762,13 +1753,8 @@ async function openChat(uid, name) {
       window.visualViewport.addEventListener('resize', _adjustChat);
       window.visualViewport.addEventListener('scroll', _adjustChat);
     }
-    // Fallback for browsers without visualViewport
-    const cinput = document.getElementById('cinput');
-    if (cinput) {
-      cinput.addEventListener('focus', () => { setTimeout(_adjustChat, 300); setTimeout(_adjustChat, 600); });
-      cinput.addEventListener('blur', () => setTimeout(_adjustChat, 150));
-    }
-    _adjustChat(); // set initial height
+    window.addEventListener('resize', _adjustChat);
+    _adjustChat(); // set immediately
   }
 }
 let _typTimer;
@@ -1834,11 +1820,12 @@ function closeMobileChat() {
   clearInterval(window._presTimer);
   const ccol = document.getElementById('ccol');
   if (ccol) { ccol.style.height = ''; ccol.style.transition = ''; }
-  const bnav = document.getElementById('bnav');
-  if (bnav) bnav.style.display = '';
-  if (window.visualViewport && window._vpHandler) {
-    window.visualViewport.removeEventListener('resize', window._vpHandler);
-    window.visualViewport.removeEventListener('scroll', window._vpHandler);
+  if (window._vpHandler) {
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', window._vpHandler);
+      window.visualViewport.removeEventListener('scroll', window._vpHandler);
+    }
+    window.removeEventListener('resize', window._vpHandler);
     window._vpHandler = null;
   }
   document.querySelectorAll('#bnav button').forEach(b => b.classList.remove('active'));
