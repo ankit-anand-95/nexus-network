@@ -1069,6 +1069,7 @@ function renderPost(p) {
   const reactCountsHtml = `<div class="react-counts">${_renderRxCounts(p.reactions || [])}</div>`;
   const anonAv = `<div class="av av40" style="background:linear-gradient(135deg,#1f2937,#4b5563);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%" title="Anonymous"><i class="fas fa-user-secret" style="color:rgba(255,255,255,.9);font-size:20px"></i></div>`;
   const safeContent = (p.content||'').replace(/\\/g,'\\\\').replace(/'/g,'&apos;').replace(/\n/g,'\\n');
+  return `<div id="pc-${p.id}" class="card post-card">
     <div class="post-hdr">${p.is_anonymous ? anonAv : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge"><i class="fas fa-user-secret" style="margin-right:4px;font-size:10px"></i>Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${escHtml(p.author_name || 'Nexus Member')}</a>`}</h4><p>${escHtml(p.author_headline || '')}${p.author_headline ? ' &bull; ' : ''}${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>
     <div style="margin-left:auto;display:flex;gap:2px;align-items:center">
       ${!mine ? `<button class="flag-btn" onclick="flagContent('post',${p.id})" title="Report"><i class="fas fa-flag"></i></button>` : ''}
