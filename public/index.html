@@ -842,14 +842,23 @@ function initSocket() {
     }
   });
 
-  socket.on('mentor_slot_booked', ({ expertId, slots }) => {
-    if (curPage === 'experts') { apiInvalidate('/api/experts'); renderExperts(); return; }
-    const card = document.querySelector(`[data-expert="${expertId}"]`);
-    if (!card) return;
-    const free = slots.filter(s => !s.booked).length;
-    const total = slots.length;
-    const el = card.querySelector('.slot-count');
-    if (el) { el.textContent = `${free} of ${total} slots available`; el.style.color = free ? '#22c55e' : '#ef4444'; }
+  socket.on('mentor_slot_booked', ({ expertId, sessionId, slots }) => {
+    // Always invalidate both caches — affects both the public listing and mentor's own dashboard
+    apiInvalidate('/api/experts');
+    apiInvalidate('/api/mentor-sessions');
+    if (curPage === 'experts') { renderExperts(); return; }
+    // If not on experts page, do a lightweight DOM update for the public listing card
+    if (expertId) {
+      const card = document.querySelector(`[data-expert="${expertId}"]`);
+      if (card) {
+        const free = (slots || []).filter(s => !s.booked).length;
+        const total = (slots || []).length;
+        const el = card.querySelector('.slot-count');
+        if (el) { el.textContent = `${free} of ${total} slots available`; el.style.color = free ? '#22c55e' : '#ef4444'; }
+        // Hide card if no free slots remain
+        if (free === 0) card.style.display = 'none';
+      }
+    }
   });
 
   socket.on('session_update', ({ sessionId, status }) => {

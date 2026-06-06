@@ -907,20 +907,30 @@ app.delete('/api/mentor-sessions/:id', auth, (req, res) => {
 
 app.post('/api/mentor-sessions/:id/book-slot', auth, (req, res) => {
   const { slotKey } = req.body;
-  const ms = db.prepare(`SELECT * FROM mentor_sessions WHERE id=? AND is_active=1`).get(req.params.id);
-  if (!ms) return res.status(404).json({ error: 'Session not found' });
-  if (ms.user_id === req.user.id) return res.status(400).json({ error: 'Cannot book your own session' });
-  const slots = JSON.parse(ms.availability_slots || '[]');
-  const slot = slots.find(s => s.key === slotKey);
-  if (!slot) return res.status(404).json({ error: 'Slot not found' });
-  if (slot.booked) return res.status(400).json({ error: 'Slot already booked' });
-  slot.booked = true; slot.booked_by = req.user.id;
-  db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
-  const sessionInfo = db.prepare(`INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status, mentor_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(ms.user_id, req.user.id, ms.title, 'Mentorship', slotKey, 60, ms.meeting_link || '', ms.price_per_session || 500, slotKey, 'pending', ms.id);
+  let result;
+  try {
+    result = db.transaction(() => {
+      const ms = db.prepare(`SELECT * FROM mentor_sessions WHERE id=? AND is_active=1`).get(req.params.id);
+      if (!ms) return { error: 'Session not found', status: 404 };
+      if (ms.user_id === req.user.id) return { error: 'Cannot book your own session', status: 400 };
+      const slots = JSON.parse(ms.availability_slots || '[]');
+      const slot = slots.find(s => s.key === slotKey);
+      if (!slot) return { error: 'Slot not found', status: 404 };
+      if (slot.booked) return { error: 'This slot was just booked by someone else. Please choose another.', status: 409 };
+      slot.booked = true; slot.booked_by = req.user.id;
+      db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+      const sessionInfo = db.prepare(`INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status, mentor_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(ms.user_id, req.user.id, ms.title, 'Mentorship', slotKey, 60, ms.meeting_link || '', ms.price_per_session || 500, slotKey, 'pending', ms.id);
+      return { ok: true, sessionInfo, ms, slots };
+    })();
+  } catch(e) {
+    return res.status(500).json({ error: 'Booking failed, please try again' });
+  }
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  const { ms, slots, sessionInfo } = result;
   const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
   createNotif(ms.user_id, req.user.id, 'session_booked', sessionInfo.lastInsertRowid, `${actor.name} requested a "${ms.title}" session — please accept or decline`);
-  io.to(`user_${ms.user_id}`).emit('mentor_slot_booked', { sessionId: ms.id, slots });
+  io.emit('mentor_slot_booked', { expertId: ms.user_id, sessionId: ms.id, slots });
   res.json({ ok: true, meeting_link: ms.meeting_link, session_id: sessionInfo.lastInsertRowid });
 });
 
@@ -953,13 +963,16 @@ app.get('/api/experts', auth, (req, res) => {
       AND ep.user_id NOT IN (SELECT user_id FROM mentor_sessions WHERE is_active=1)
   `).all();
 
-  const all = [...newSessions, ...legacySessions].sort((a,b) => b.rating - a.rating);
-  res.json(all.map(s => ({
-    ...s,
-    expertise: typeof s.expertise === 'string' && s.expertise.startsWith('[')
-      ? JSON.parse(s.expertise) : s.expertise,
-    availability_slots: JSON.parse(s.availability_slots || '[]')
-  })));
+  const all = [...newSessions, ...legacySessions]
+    .map(s => ({
+      ...s,
+      expertise: typeof s.expertise === 'string' && s.expertise.startsWith('[')
+        ? JSON.parse(s.expertise) : s.expertise,
+      availability_slots: JSON.parse(s.availability_slots || '[]')
+    }))
+    .filter(s => s.availability_slots.some(sl => !sl.booked))
+    .sort((a,b) => b.rating - a.rating);
+  res.json(all);
 });
 
 app.get('/api/experts/me', auth, (req, res) => {
