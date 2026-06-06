@@ -260,6 +260,19 @@ const extraTables = [
 ];
 
 const newTables = [
+  `CREATE TABLE IF NOT EXISTS mentor_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT 'Mentorship Session',
+    expertise TEXT NOT NULL DEFAULT '',
+    price_per_session INTEGER DEFAULT 500,
+    meeting_link TEXT DEFAULT '',
+    bio TEXT DEFAULT '',
+    availability_slots TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS saved_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -296,6 +309,7 @@ const migrations = [
   `ALTER TABLE users ADD COLUMN blocked_until DATETIME DEFAULT NULL`,
   `ALTER TABLE users ADD COLUMN is_disabled INTEGER DEFAULT 0`,
   `ALTER TABLE interview_sessions ADD COLUMN slot_key TEXT DEFAULT ''`,
+  `ALTER TABLE interview_sessions ADD COLUMN mentor_session_id INTEGER DEFAULT NULL`,
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 

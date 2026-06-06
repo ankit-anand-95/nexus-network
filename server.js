@@ -871,19 +871,82 @@ app.delete('/api/reviews/:id', auth, (req, res) => {
 
 // ─── EXPERT / MOCK INTERVIEWS ─────────────────────────────────────────────────
 
+// ── MENTOR SESSIONS (multi-session per mentor) ────────────────────────────
+app.get('/api/mentor-sessions/mine', auth, (req, res) => {
+  const sessions = db.prepare(`SELECT * FROM mentor_sessions WHERE user_id=? AND is_active=1 ORDER BY created_at DESC`).all(req.user.id);
+  res.json(sessions.map(s => ({ ...s, availability_slots: JSON.parse(s.availability_slots || '[]') })));
+});
+
+app.post('/api/mentor-sessions', auth, (req, res) => {
+  const { title, expertise, price_per_session, meeting_link, bio, availability_slots } = req.body;
+  if (!title || !expertise) return res.status(400).json({ error: 'Title and expertise required' });
+  const info = db.prepare(`INSERT INTO mentor_sessions (user_id, title, expertise, price_per_session, meeting_link, bio, availability_slots) VALUES (?,?,?,?,?,?,?)`)
+    .run(req.user.id, title, expertise, price_per_session || 500, meeting_link || '', bio || '', JSON.stringify(availability_slots || []));
+  // Ensure expert_profiles row exists (for rating tracking)
+  const ep = db.prepare(`SELECT id FROM expert_profiles WHERE user_id=?`).get(req.user.id);
+  if (!ep) db.prepare(`INSERT INTO expert_profiles (user_id, bio, expertise, price_per_session, meeting_link, availability_slots) VALUES (?,?,?,?,?,?)`)
+    .run(req.user.id, bio || '', JSON.stringify([expertise]), price_per_session || 500, meeting_link || '', '[]');
+  res.json({ id: info.lastInsertRowid, ok: true });
+});
+
+app.put('/api/mentor-sessions/:id', auth, (req, res) => {
+  const ms = db.prepare(`SELECT * FROM mentor_sessions WHERE id=? AND user_id=?`).get(req.params.id, req.user.id);
+  if (!ms) return res.status(404).json({ error: 'Not found' });
+  const { title, expertise, price_per_session, meeting_link, bio, availability_slots } = req.body;
+  db.prepare(`UPDATE mentor_sessions SET title=?, expertise=?, price_per_session=?, meeting_link=?, bio=?, availability_slots=? WHERE id=?`)
+    .run(title ?? ms.title, expertise ?? ms.expertise, price_per_session ?? ms.price_per_session, meeting_link ?? ms.meeting_link, bio ?? ms.bio, JSON.stringify(availability_slots ?? JSON.parse(ms.availability_slots || '[]')), ms.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/mentor-sessions/:id', auth, (req, res) => {
+  const ms = db.prepare(`SELECT id FROM mentor_sessions WHERE id=? AND user_id=?`).get(req.params.id, req.user.id);
+  if (!ms) return res.status(404).json({ error: 'Not found' });
+  db.prepare(`UPDATE mentor_sessions SET is_active=0 WHERE id=?`).run(ms.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/mentor-sessions/:id/book-slot', auth, (req, res) => {
+  const { slotKey } = req.body;
+  const ms = db.prepare(`SELECT * FROM mentor_sessions WHERE id=? AND is_active=1`).get(req.params.id);
+  if (!ms) return res.status(404).json({ error: 'Session not found' });
+  if (ms.user_id === req.user.id) return res.status(400).json({ error: 'Cannot book your own session' });
+  const slots = JSON.parse(ms.availability_slots || '[]');
+  const slot = slots.find(s => s.key === slotKey);
+  if (!slot) return res.status(404).json({ error: 'Slot not found' });
+  if (slot.booked) return res.status(400).json({ error: 'Slot already booked' });
+  slot.booked = true; slot.booked_by = req.user.id;
+  db.prepare(`UPDATE mentor_sessions SET availability_slots=? WHERE id=?`).run(JSON.stringify(slots), ms.id);
+  const sessionInfo = db.prepare(`INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status, mentor_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(ms.user_id, req.user.id, ms.title, 'Mentorship', slotKey, 60, ms.meeting_link || '', ms.price_per_session || 500, slotKey, 'pending', ms.id);
+  const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
+  createNotif(ms.user_id, req.user.id, 'session_booked', sessionInfo.lastInsertRowid, `${actor.name} requested a "${ms.title}" session — please accept or decline`);
+  io.to(`user_${ms.user_id}`).emit('mentor_slot_booked', { sessionId: ms.id, slots });
+  res.json({ ok: true, meeting_link: ms.meeting_link, session_id: sessionInfo.lastInsertRowid });
+});
+
+// ── EXPERTS (backward compat + new mentor_sessions) ──────────────────────
 app.get('/api/experts', auth, (req, res) => {
-  const experts = db.prepare(`
-    SELECT e.*, u.name, u.headline, u.avatar_url, u.location
-    FROM expert_profiles e JOIN users u ON e.user_id=u.id
-    WHERE e.is_available=1 ORDER BY e.rating DESC, e.total_sessions DESC
+  // Return mentor_sessions (new multi-session system)
+  const sessions = db.prepare(`
+    SELECT ms.*, u.name, u.headline, u.avatar_url, u.location,
+      COALESCE(ep.rating, 0) as rating, COALESCE(ep.rating_count, 0) as rating_count,
+      COALESCE(ep.total_sessions, 0) as total_sessions
+    FROM mentor_sessions ms
+    JOIN users u ON ms.user_id = u.id
+    LEFT JOIN expert_profiles ep ON ep.user_id = ms.user_id
+    WHERE ms.is_active=1
+    ORDER BY ep.rating DESC, ms.created_at DESC
   `).all();
-  res.json(experts.map(e => ({ ...e, expertise: JSON.parse(e.expertise || '[]'), session_types: JSON.parse(e.session_types || '[]'), availability_slots: JSON.parse(e.availability_slots || '[]') })));
+  res.json(sessions.map(s => ({ ...s, availability_slots: JSON.parse(s.availability_slots || '[]') })));
 });
 
 app.get('/api/experts/me', auth, (req, res) => {
-  const expert = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(req.user.id);
-  if (!expert) return res.json(null);
-  res.json({ ...expert, expertise: JSON.parse(expert.expertise || '[]'), session_types: JSON.parse(expert.session_types || '[]'), availability_slots: JSON.parse(expert.availability_slots || '[]') });
+  // Check if user is a mentor (has any active mentor_sessions OR expert_profiles)
+  const hasMs = db.prepare(`SELECT id FROM mentor_sessions WHERE user_id=? AND is_active=1 LIMIT 1`).get(req.user.id);
+  const ep = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(req.user.id);
+  if (!hasMs && !ep) return res.json(null);
+  if (ep) return res.json({ ...ep, expertise: JSON.parse(ep.expertise || '[]'), session_types: JSON.parse(ep.session_types || '[]'), availability_slots: JSON.parse(ep.availability_slots || '[]') });
+  return res.json({ user_id: req.user.id });
 });
 
 app.post('/api/experts/me', auth, (req, res) => {
@@ -897,33 +960,6 @@ app.post('/api/experts/me', auth, (req, res) => {
       .run(req.user.id, bio, JSON.stringify(expertise || []), JSON.stringify(session_types || []), price_per_session || 500, meeting_link || '', JSON.stringify(availability_slots || []));
   }
   res.json({ ok: true });
-});
-
-// Book a specific availability slot
-app.post('/api/experts/:expertId/book-slot', auth, (req, res) => {
-  const { slotKey } = req.body;
-  const expertId = parseInt(req.params.expertId);
-  const expert = db.prepare(`SELECT * FROM expert_profiles WHERE user_id=?`).get(expertId);
-  if (!expert) return res.status(404).json({ error: 'Expert not found' });
-  if (expertId === req.user.id) return res.status(400).json({ error: 'Cannot book your own session' });
-  const slots = JSON.parse(expert.availability_slots || '[]');
-  const slot = slots.find(s => s.key === slotKey);
-  if (!slot) return res.status(404).json({ error: 'Slot not found' });
-  if (slot.booked) return res.status(400).json({ error: 'Slot already booked' });
-  // Mark slot as reserved
-  slot.booked = true; slot.booked_by = req.user.id;
-  db.prepare(`UPDATE expert_profiles SET availability_slots=? WHERE user_id=?`).run(JSON.stringify(slots), expertId);
-  // Create interview_sessions row (status=pending — awaiting mentor approval)
-  const sessionInfo = db.prepare(`INSERT INTO interview_sessions (expert_id, learner_id, topic, session_type, scheduled_at, duration_minutes, meeting_link, price, slot_key, status) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-    .run(expertId, req.user.id, 'Mentorship Session', 'Mentorship', slotKey, 60, expert.meeting_link||'', expert.price_per_session||500, slotKey, 'pending');
-  const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
-  const _sd = new Date(slotKey);
-  const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const _days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const readableSlot = `${_days[_sd.getUTCDay()]}, ${_sd.getUTCDate()} ${_months[_sd.getUTCMonth()]} at ${String(_sd.getUTCHours()).padStart(2,'0')}:${String(_sd.getUTCMinutes()).padStart(2,'0')}`;
-  createNotif(expertId, req.user.id, 'session_booked', sessionInfo.lastInsertRowid, `${actor.name} requested a session on ${readableSlot} — please accept or decline`);
-  io.emit('mentor_slot_booked', { expertId, slots });
-  res.json({ ok: true, meeting_link: expert.meeting_link, session_id: sessionInfo.lastInsertRowid });
 });
 
 app.get('/api/sessions', auth, (req, res) => {
@@ -1243,6 +1279,29 @@ app.post('/api/users/:id/follow', auth, (req, res) => {
   if (existing) {
     db.prepare('DELETE FROM follows WHERE follower_id=? AND following_id=?').run(req.user.id, targetId);
     res.json({ following: false });
+  } else {
+    db.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?,?)').run(req.user.id, targetId);
+    const actor = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
+    if (actor) createNotif(targetId, req.user.id, 'follow', 0, `${actor.name} started following you`);
+    res.json({ following: true });
+  }
+});
+app.get('/api/users/:id/followers', auth, (req, res) => {
+  const rows = db.prepare('SELECT u.id, u.name, u.headline, u.avatar_url FROM follows f JOIN users u ON f.follower_id=u.id WHERE f.following_id=? LIMIT 50').all(req.params.id);
+  res.json(rows);
+});
+app.get('/api/users/:id/following', auth, (req, res) => {
+  const rows = db.prepare('SELECT u.id, u.name, u.headline, u.avatar_url FROM follows f JOIN users u ON f.following_id=u.id WHERE f.follower_id=? LIMIT 50').all(req.params.id);
+  res.json(rows);
+});
+
+// ── SAVED POSTS ───────────────────────────────────────────────────────────
+app.post('/api/posts/:id/save', auth, (req, res) => {
+  const postId = parseInt(req.params.id);
+  const existing = db.prepare('SELECT id FROM saved_posts WHERE user_id=? AND post_id=?').get(req.user.id, postId);
+  if (existing) {
+    db.prepare('DELETE FROM saved_posts WHERE user_id=? AND post_id=?').run(req.user.id, postId);
+    res.json({ saved: false });
   } else {
     db.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?,?)').run(req.user.id, targetId);
     const actor = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
