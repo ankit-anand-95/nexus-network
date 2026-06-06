@@ -1223,35 +1223,3 @@ app.get('/api/trending', auth, (req, res) => {
   _trendingTs = Date.now();
   res.json(_trendingCache);
 });
-60 * 1000) {
-    return res.json(_trendingCache);
-  }
-  const topPosts = db.prepare(`
-    SELECT p.id, p.content, u.name as author_name, u.avatar_url as author_avatar,
-      COUNT(pr.id) as reaction_count, COUNT(DISTINCT c.id) as comment_count
-    FROM posts p
-    LEFT JOIN users u ON p.author_id=u.id
-    LEFT JOIN post_reactions pr ON pr.post_id=p.id
-    LEFT JOIN comments c ON c.post_id=p.id
-    WHERE p.is_published=1 AND p.is_anonymous=0
-      AND p.created_at > datetime('now','-7 days')
-    GROUP BY p.id
-    ORDER BY reaction_count DESC, comment_count DESC
-    LIMIT 5
-  \`).all();
-  const tagRows = db.prepare(`
-    SELECT content FROM posts
-    WHERE is_published=1 AND created_at > datetime('now','-7 days')
-    AND content LIKE '%#%'
-    LIMIT 500
-  \`).all();
-  const tagCount = {};
-  tagRows.forEach(p => {
-    const tags = (p.content || '').match(/#[\w]+/g) || [];
-    tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
-  });
-  const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
-  _trendingCache = { top_posts: topPosts, trending_tags };
-  _trendingTs = Date.now();
-  res.json(_trendingCache);
-});
