@@ -2563,6 +2563,12 @@ async function saveJob() {
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
+// Absolute splash kill — fires after 8s regardless of API response
+setTimeout(() => {
+  const l = document.getElementById('nxload');
+  if (l) { l.style.opacity = '0'; setTimeout(() => l.remove(), 350); }
+}, 8000);
+
 (async () => {
   if (localStorage.getItem('nxdark') === '1') document.body.classList.add('dark');
   const resetToken = new URLSearchParams(window.location.search).get('reset');
@@ -2578,7 +2584,10 @@ async function saveJob() {
   if (saved) {
     token = saved;
     try {
-      me = await api('/api/users/me');
+      me = await Promise.race([
+        api('/api/users/me'),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 7000))
+      ]);
       if (me && me.id) {
         document.getElementById('awrap').style.display = 'none';
         document.getElementById('appw').style.display = 'flex';
