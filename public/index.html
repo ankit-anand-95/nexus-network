@@ -313,9 +313,13 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 /* ── MOBILE (≤640px) ─────────────────────────────────────── */
 @media(max-width:640px){
   /* ── GLOBAL ── */
-  html,body{overflow-x:hidden;max-width:100vw}
+  /* Only overflow-x:hidden on html — NOT body (body overflow:hidden clips fixed elements on iOS Safari) */
+  html{overflow-x:hidden}
+  body{width:100%;max-width:100vw;position:relative}
   /* Prevent browser auto-zoom on input focus (triggers when font-size < 16px) */
   input,textarea,select{font-size:16px !important}
+  /* All block containers box-sizing safe */
+  .card,.modal,section,article,.page{box-sizing:border-box;width:100%}
   /* ── NAV ── */
   nav{padding:0 12px;height:56px}
   .logo-txt{display:none}
@@ -326,7 +330,7 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   /* ── BOTTOM NAV ── */
   #bnav{display:flex}
   /* ── CONTENT OFFSET ── */
-  #pr{padding:64px 10px 76px}
+  #pr{padding:64px 10px 76px;overflow-x:hidden;width:100%;box-sizing:border-box}
   /* ── MESSAGING LAYOUT ── */
   #mlay{grid-template-columns:1fr;height:calc(100dvh - 112px)}
   .mlist{height:100%;display:flex;flex-direction:column;overflow-y:auto}
@@ -338,53 +342,58 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   body.in-chat #bnav{display:none}
   /* ── CHAT INTERNALS ── */
   #ctop{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-shrink:0;border-bottom:1px solid var(--border);flex-wrap:nowrap;min-height:52px}
-  #ctop h3{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #ctop h3{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
   #ctop p{font-size:11px;display:none}
   #cinp{padding:8px 10px;padding-bottom:max(8px,env(safe-area-inset-bottom,8px));gap:6px;flex-shrink:0;border-top:1px solid var(--border);background:var(--card)}
-  #cinp input{font-size:13px;padding:9px 12px}
+  #cinp input{font-size:16px !important;padding:9px 12px}
   #cmsgs{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 12px;box-sizing:border-box;width:100%}
   .bub{max-width:78%;word-break:break-word;overflow-wrap:break-word;box-sizing:border-box}
-  #cinp input{font-size:13px;padding:9px 12px}
   /* ── BACK BUTTON ── */
   .back-to-threads{display:flex;align-items:center;gap:6px;background:var(--indigo-light);color:var(--primary);border:none;cursor:pointer;padding:7px 12px;border-radius:20px;font-size:13px;font-weight:700;flex-shrink:0}
   /* ── MODALS → BOTTOM SHEET ── */
   .modal-bg{align-items:flex-end;padding:0}
-  .modal{border-radius:20px 20px 0 0;max-height:90dvh;width:100%;max-width:100%;box-sizing:border-box;padding:22px 20px;overflow-y:auto}
+  .modal{border-radius:20px 20px 0 0;max-height:90dvh;width:100%;max-width:100%;box-sizing:border-box;padding:22px 20px;overflow-y:auto;overflow-x:hidden}
   /* ── LAYOUT ── */
   .two-col{grid-template-columns:1fr;gap:0}
   #sl{display:none}
   #rs{display:none}
-  .card{border-radius:10px;overflow-x:hidden}
+  .card{border-radius:10px;overflow:hidden;box-sizing:border-box;width:100%}
   .sug-grid{grid-template-columns:repeat(2,1fr);gap:10px}
-  /* Prevent all child elements from overflowing viewport */
-  #pr *{max-width:100%;box-sizing:border-box}
-  /* People rows must wrap on small screens */
-  .prow{flex-wrap:wrap;gap:10px}
-  .prow .pinfo{min-width:0;flex:1}
-  /* Mentor stat bar scrolls horizontally within card */
+  /* ── PEOPLE / NETWORK ROWS ── */
+  .prow{flex-wrap:wrap;gap:8px;box-sizing:border-box;width:100%;overflow:hidden}
+  .prow .pinfo{min-width:0;flex:1 1 60%}
+  .prow .pacts{display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0}
+  /* ── MENTOR STAT BAR ── */
   .slot-stats-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap !important}
-  /* Notification items */
-  .notif-item{overflow:hidden}
-  /* Job meta tags */
-  .jmeta{flex-wrap:wrap}
+  /* ── NOTIFICATION ITEMS ── */
+  .notif-item{overflow:hidden;box-sizing:border-box}
+  .notif-item .pinfo{min-width:0;overflow:hidden}
+  .notif-item .pinfo p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* ── JOB TAGS ── */
+  .jmeta{flex-wrap:wrap;gap:8px}
   /* ── FEED ── */
   .post-hdr{padding:12px 14px 0}
-  .post-body{padding:10px 14px;font-size:13px}
+  .post-body{padding:10px 14px;font-size:13px;word-break:break-word}
   .post-acts{padding:4px 6px;gap:0}
   .pact{padding:7px 10px;font-size:12px;gap:4px}
   .react-counts{padding:2px 14px 4px}
   /* ── COMPOSER ── */
   .comp-wrap{padding:12px 14px 6px}
-  .comp-ta{min-height:72px;font-size:13px}
-  .comp-acts{padding:6px 14px 10px;gap:4px;flex-wrap:wrap}
-  .cbtn{padding:5px 8px;font-size:11px;gap:4px}
+  .comp-ta{min-height:72px;font-size:16px !important}
+  /* Icon-only buttons on mobile — hide the text labels */
+  .cbtn-lbl{display:none}
+  /* Show short "Anon" label instead of "Anonymous" on mobile */
+  .cbtn-mob-lbl{display:inline}
+  .comp-acts{padding:6px 12px 10px;gap:6px;flex-wrap:nowrap;align-items:center;overflow:visible}
+  .cbtn{padding:8px 10px;font-size:15px;gap:0;min-width:0;flex-shrink:0}
+  .anon-lbl{font-size:12px;flex-shrink:0;white-space:nowrap}
   /* ── THREADS LIST ── */
   .mhdr{padding:12px 16px;font-size:14px}
   .mthread{padding:12px 14px}
   /* ── PROFILE ── */
   .prof-body{padding:52px 16px 14px}
   .prof-body h1{font-size:18px}
-  .prof-actions{gap:8px}
+  .prof-actions{gap:8px;flex-wrap:wrap}
   /* ── FORMS ── */
   .frow{grid-template-columns:1fr}
   .frow2{flex-direction:column}
@@ -392,12 +401,23 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
   .phdr h1{font-size:18px}
   .phdr{margin-bottom:12px}
   /* ── JOBS ── */
-  .ji{padding:14px}
-  .jmeta{gap:8px}
-  /* ── EXPERTS ── */
+  .ji{padding:14px;overflow:hidden}
+  /* ── EXPERTS GRID ── */
   .sug-grid .card{padding:14px}
-  /* ── NOTIFICATIONS ── */
-  .prow{padding:12px 14px}
+  /* ── ME BOTTOM SHEET ── */
+  /* Always full-width via position:fixed left:0 right:0 — ensure content doesn't overflow */
+  #mob-sheet{overflow-x:hidden;box-sizing:border-box;max-width:100vw}
+  #mob-sheet *{box-sizing:border-box}
+  /* Profile header row: avatar is flex-shrink:0, text div must shrink */
+  #mob-sheet-profile{overflow:hidden}
+  #mob-sheet-profile > div{min-width:0;overflow:hidden;flex:1}
+  #mob-sheet-profile p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+  /* ── SALARY / REVIEW / EXPERT CARDS ── */
+  .rev-card,.sal-card,.expert-card{overflow:hidden;box-sizing:border-box;width:100%}
+}
+/* Desktop: hide mobile-only labels */
+@media(min-width:641px){
+  .cbtn-mob-lbl{display:none}
 }
 /* Very small phones */
 @media(max-width:380px){
@@ -1331,12 +1351,14 @@ function renderComposer() {
   el.innerHTML = `<div class="comp-wrap"><div class="comp-top">${av(me, 'av40')}<textarea id="ptxt" class="comp-ta" placeholder="What's on your mind? Share with your network…" rows="3"></textarea></div></div>
   <div id="cext" class="comp-ext"></div>
   <div class="comp-acts">
-    <button class="cbtn" id="cb-photo" onclick="tmode('photo')"><i class="fas fa-image" style="color:#3b82f6"></i> Photo</button>
-    <button class="cbtn" id="cb-poll" onclick="tmode('poll')"><i class="fas fa-chart-bar" style="color:#8b5cf6"></i> Poll</button>
-    <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i> Schedule</button>
-    <button class="cbtn" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊 Emoji</button>
-    <label class="anon-lbl"><input type="checkbox" id="anonchk"> Anonymous</label>
-    <button class="btn btn-p btn-sm" style="margin-left:8px" onclick="submitPost()">Post</button>
+    <button class="cbtn" id="cb-photo" onclick="tmode('photo')"><i class="fas fa-image" style="color:#3b82f6"></i><span class="cbtn-lbl"> Photo</span></button>
+    <button class="cbtn" id="cb-poll" onclick="tmode('poll')"><i class="fas fa-chart-bar" style="color:#8b5cf6"></i><span class="cbtn-lbl"> Poll</span></button>
+    <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i><span class="cbtn-lbl"> Schedule</span></button>
+    <button class="cbtn" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊<span class="cbtn-lbl"> Emoji</span></button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <label class="anon-lbl" style="margin-left:0"><input type="checkbox" id="anonchk"> <span class="cbtn-lbl">Anonymous</span><span class="cbtn-mob-lbl">Anon</span></label>
+      <button class="btn btn-p btn-sm" onclick="submitPost()"><i class="fas fa-paper-plane"></i><span class="cbtn-lbl"> Post</span></button>
+    </div>
   </div>`;
 }
 function tmode(m) {
