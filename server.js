@@ -453,6 +453,17 @@ app.get('/api/posts', auth, (req, res) => {
     if (p.is_anonymous && p.author_id !== req.user.id) post.author_id = null;
     return post;
   });
+  // Record post views server-side — only for posts by other authors
+  try {
+    const viewerId = req.user.id;
+    const insertView = db.prepare('INSERT OR IGNORE INTO post_views (post_id, viewer_id) VALUES (?, ?)');
+    result.forEach(p => {
+      if (p.author_id && p.author_id !== viewerId) {
+        insertView.run(p.id, viewerId);
+      }
+    });
+  } catch(e) { /* post_views table may not exist yet on first deploy */ }
+
   res.json(result);
 });
 
