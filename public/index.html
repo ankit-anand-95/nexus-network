@@ -2037,13 +2037,16 @@ function editProfile() {
 }
 async function saveProfile() {
   const b = { name: document.getElementById('epn').value, headline: document.getElementById('eph').value, location: document.getElementById('epl').value, current_position: document.getElementById('epcp').value, about: document.getElementById('epa').value };
-  await api('/api/users/me', { method: 'PUT', body: JSON.stringify(b) }); me = { ...me, ...b };
+  const _res = await api('/api/users/me', { method: 'PUT', body: JSON.stringify(b) });
+  if (_res.error) { toast('Save failed: ' + _res.error); return; }
+  me = { ...me, ...b };
   apiInvalidate('/api/users/me'); apiInvalidate('/api/users/' + me.id);
-  closeModal(); renderProfile();
-  // Also update sidebar elements immediately without waiting for re-render
-  const _sbn = document.getElementById('sb-name'); if (_sbn) _sbn.textContent = b.name || me.name;
-  const _sbh = document.getElementById('sb-hl'); if (_sbh) _sbh.textContent = b.headline || me.headline || '';
-  toast('Profile updated!');
+  closeModal();
+  await renderProfile();
+  // Update nav/sidebar elements immediately
+  const _sbn = document.getElementById('sb-name'); if (_sbn) _sbn.textContent = me.name || '';
+  const _sbh = document.getElementById('sb-hl'); if (_sbh) _sbh.textContent = me.headline || '';
+  toast('Profile updated! ✅');
 }
 async function uploadFile(inp, type) {
   const fd = new FormData(); fd.append('file', inp.files[0]); fd.append('type', type);
@@ -2084,7 +2087,9 @@ function addSkill() {
 }
 async function saveSkill() {
   const name = document.getElementById('skn').value.trim(); if (!name) return;
-  await api('/api/users/me/skills', { method: 'POST', body: JSON.stringify({ name }) }); closeModal(); renderProfile(); toast('Skill added!');
+  await api('/api/users/me/skills', { method: 'POST', body: JSON.stringify({ name }) });
+  apiInvalidate('/api/users/me'); apiInvalidate('/api/users/' + me.id);
+  closeModal(); renderProfile(); toast('Skill added! 🎉');
 }
 async function removeConn(id) {
   showConfirm('Remove this connection?', async () => {
