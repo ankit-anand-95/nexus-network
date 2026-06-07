@@ -693,6 +693,7 @@ app.post('/api/connections/:id', auth, (req, res) => {
   const targetId = parseInt(req.params.id);
   try {
     db.prepare(`INSERT INTO connections (requester_id, addressee_id) VALUES (?, ?)`).run(req.user.id, targetId);
+    io.to(`user_${targetId}`).emit('connection_update', { type: 'requested', with: req.user.id });
     const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
     createNotif(targetId, req.user.id, 'connection_request', req.user.id, `${actor.name} sent you a connection request`);
     res.json({ ok: true });
@@ -708,6 +709,9 @@ app.put('/api/connections/:id', auth, (req, res) => {
     db.prepare(`UPDATE users SET connections_count=connections_count+1 WHERE id=? OR id=?`).run(conn.requester_id, conn.addressee_id);
     const actor = db.prepare(`SELECT name FROM users WHERE id=?`).get(req.user.id);
     createNotif(conn.requester_id, req.user.id, 'connection_accepted', req.user.id, `${actor.name} accepted your connection request`);
+    // Real-time: tell BOTH users to refresh their connection state immediately
+    io.to(`user_${conn.requester_id}`).emit('connection_update', { type: 'accepted', with: req.user.id });
+    io.to(`user_${req.user.id}`).emit('connection_update', { type: 'accepted', with: conn.requester_id });
   } else {
     db.prepare(`DELETE FROM connections WHERE id=?`).run(req.params.id);
   }
