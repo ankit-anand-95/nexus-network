@@ -10,17 +10,28 @@
 :root{--primary:#6366f1;--primary-dark:#4f46e5;--secondary:#8b5cf6;--bg:#f3f4f8;--card:#fff;--text:#1e1b3a;--sub:#6b7280;--border:#e5e7eb;--inp:#f9fafb;--indigo-light:#eef2ff;--r:16px;--r-sm:10px;--shadow:0 2px 12px rgba(99,102,241,.08)}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);transition:background .2s,color .2s}
 body.dark{--bg:#0f0e1a;--card:#1a1830;--text:#e8e6f0;--sub:#9ca3af;--border:#2d2b45;--inp:#221f3a;--indigo-light:#1e1b3a;--shadow:0 2px 12px rgba(0,0,0,.4)}
-/* ── Professional Themes ── (accent only; works in both light + dark mode) */
-body.t-ocean{--primary:#0ea5e9;--primary-dark:#0284c7;--secondary:#38bdf8;--indigo-light:#e0f2fe}
-body.dark.t-ocean{--indigo-light:#0c2233}
-body.t-emerald{--primary:#10b981;--primary-dark:#059669;--secondary:#34d399;--indigo-light:#d1fae5}
-body.dark.t-emerald{--indigo-light:#052e16}
-body.t-violet{--primary:#8b5cf6;--primary-dark:#7c3aed;--secondary:#a78bfa;--indigo-light:#ede9fe}
-body.dark.t-violet{--indigo-light:#2e1065}
-body.t-rose{--primary:#f43f5e;--primary-dark:#e11d48;--secondary:#fb7185;--indigo-light:#ffe4e6}
-body.dark.t-rose{--indigo-light:#2d0a14}
-body.t-amber{--primary:#d97706;--primary-dark:#b45309;--secondary:#fbbf24;--indigo-light:#fef3c7}
-body.dark.t-amber{--indigo-light:#1c1400}
+/* ── VISUAL TEMPLATES — full background + accent + card + text ── */
+body.tmpl-executive{--bg:#070c18;--card:#0d1425;--text:#e8ecf8;--sub:#7a8aaa;--border:#182040;--inp:#0a1020;--primary:#c9a227;--primary-dark:#a8851e;--secondary:#e8c547;--indigo-light:#1a1508;--shadow:0 2px 20px rgba(0,0,0,.6)}
+body.tmpl-executive nav{background:linear-gradient(90deg,#0a1020,#0d1830);border-bottom:1px solid #c9a22730}
+body.tmpl-executive .logo-icon{background:linear-gradient(135deg,#c9a227,#e8c547)}
+body.tmpl-slate{--bg:#141b2d;--card:#1e2840;--text:#dde4f8;--sub:#7888aa;--border:#26334f;--inp:#141b2d;--primary:#4f8ef7;--primary-dark:#2d6ef0;--secondary:#7eb3ff;--indigo-light:#162050;--shadow:0 2px 16px rgba(0,0,0,.5)}
+body.tmpl-slate nav{background:#1a2238;border-bottom:1px solid #26334f}
+body.tmpl-slate .logo-icon{background:linear-gradient(135deg,#4f8ef7,#7eb3ff)}
+body.tmpl-parchment{--bg:#f2ece0;--card:#faf6ee;--text:#2a1f0e;--sub:#7a6548;--border:#d8ccb4;--inp:#fff9f0;--primary:#92400e;--primary-dark:#78350f;--secondary:#b45309;--indigo-light:#fde68a;--shadow:0 2px 12px rgba(80,50,0,.12)}
+body.tmpl-parchment nav{background:#faf6ee;border-bottom:1px solid #d8ccb4}
+body.tmpl-parchment .logo-icon{background:linear-gradient(135deg,#92400e,#b45309)}
+body.tmpl-arctic{--bg:#edf2f7;--card:#ffffff;--text:#1a2535;--sub:#4a6080;--border:#ccd8e8;--inp:#f4f8fc;--primary:#0d9488;--primary-dark:#0f766e;--secondary:#14b8a6;--indigo-light:#ccfbf1;--shadow:0 2px 12px rgba(13,148,136,.09)}
+body.tmpl-arctic nav{background:#ffffff;border-bottom:1px solid #ccd8e8}
+body.tmpl-arctic .logo-icon{background:linear-gradient(135deg,#0d9488,#14b8a6)}
+body.tmpl-carbon{--bg:#0a0a0a;--card:#141414;--text:#f0f0f0;--sub:#808080;--border:#242424;--inp:#0f0f0f;--primary:#22c55e;--primary-dark:#16a34a;--secondary:#4ade80;--indigo-light:#052e16;--shadow:0 2px 20px rgba(0,0,0,.7)}
+body.tmpl-carbon nav{background:#0d0d0d;border-bottom:1px solid #1e1e1e}
+body.tmpl-carbon .logo-icon{background:linear-gradient(135deg,#16a34a,#22c55e)}
+body.tmpl-graphite{--bg:#16181f;--card:#1e2130;--text:#dce0f0;--sub:#808aaa;--border:#282d3e;--inp:#16181f;--primary:#a855f7;--primary-dark:#9333ea;--secondary:#c084fc;--indigo-light:#2e1a40;--shadow:0 2px 16px rgba(0,0,0,.5)}
+body.tmpl-graphite nav{background:#1a1c28;border-bottom:1px solid #2a2d3e}
+body.tmpl-graphite .logo-icon{background:linear-gradient(135deg,#9333ea,#c084fc)}
+body.tmpl-crimson{--bg:#f8f4f4;--card:#ffffff;--text:#1a0808;--sub:#6b5050;--border:#e8d5d5;--inp:#fff8f8;--primary:#be123c;--primary-dark:#9f1239;--secondary:#e11d48;--indigo-light:#ffe4e6;--shadow:0 2px 12px rgba(190,18,60,.09)}
+body.tmpl-crimson nav{background:#ffffff;border-bottom:1px solid #e8d5d5}
+body.tmpl-crimson .logo-icon{background:linear-gradient(135deg,#9f1239,#e11d48)}
 
 /* NAV */
 nav{position:fixed;top:0;left:0;right:0;height:60px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;z-index:100;box-shadow:var(--shadow)}
@@ -522,15 +533,9 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
           <hr class="me-sep">
           <a href="#" class="me-item" onclick="closeMe();toggleDark()"><i class="fas fa-moon"></i>Toggle Dark Mode</a>
           <div style="padding:8px 14px">
-            <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 7px">Accent Theme</p>
-            <div style="display:flex;gap:7px">
-              <button onclick="setTheme('')" title="Indigo" id="t-default" style="width:22px;height:22px;border-radius:50%;background:#6366f1;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-              <button onclick="setTheme('t-ocean')" title="Ocean" id="t-ocean" style="width:22px;height:22px;border-radius:50%;background:#0ea5e9;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-              <button onclick="setTheme('t-emerald')" title="Emerald" id="t-emerald" style="width:22px;height:22px;border-radius:50%;background:#10b981;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-              <button onclick="setTheme('t-violet')" title="Violet" id="t-violet" style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-              <button onclick="setTheme('t-rose')" title="Rose" id="t-rose" style="width:22px;height:22px;border-radius:50%;background:#f43f5e;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-              <button onclick="setTheme('t-amber')" title="Amber" id="t-amber" style="width:22px;height:22px;border-radius:50%;background:#d97706;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-            </div>
+            <button onclick="showTemplatePicker()" style="width:100%;background:var(--indigo-light);border:1.5px solid var(--primary);color:var(--primary);border-radius:var(--r-sm);padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;justify-content:center">
+              <i class="fas fa-palette"></i> Choose Theme
+            </button>
           </div>
           <hr class="me-sep">
           <a href="#" class="me-item danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i>Sign Out</a>
@@ -572,15 +577,9 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
     <button class="mob-si" id="mob-dark-btn" onclick="toggleDark();updateMobDarkBtn()"><i class="fas fa-moon"></i><span id="mob-dark-lbl">Dark Mode</span></button>
   </div>
   <div style="border-top:1px solid var(--border);padding:10px 20px">
-    <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Accent Theme</p>
-    <div style="display:flex;gap:9px">
-      <button onclick="setTheme('');closeMobileSheet()" title="Indigo" style="width:26px;height:26px;border-radius:50%;background:#6366f1;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-      <button onclick="setTheme('t-ocean');closeMobileSheet()" title="Ocean" style="width:26px;height:26px;border-radius:50%;background:#0ea5e9;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-      <button onclick="setTheme('t-emerald');closeMobileSheet()" title="Emerald" style="width:26px;height:26px;border-radius:50%;background:#10b981;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-      <button onclick="setTheme('t-violet');closeMobileSheet()" title="Violet" style="width:26px;height:26px;border-radius:50%;background:#8b5cf6;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-      <button onclick="setTheme('t-rose');closeMobileSheet()" title="Rose" style="width:26px;height:26px;border-radius:50%;background:#f43f5e;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-      <button onclick="setTheme('t-amber');closeMobileSheet()" title="Amber" style="width:26px;height:26px;border-radius:50%;background:#d97706;border:2px solid var(--border);cursor:pointer;outline:none"></button>
-    </div>
+    <button onclick="closeMobileSheet();showTemplatePicker()" style="width:100%;background:var(--indigo-light);border:1.5px solid var(--primary);color:var(--primary);border-radius:var(--r-sm);padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;justify-content:center">
+      <i class="fas fa-palette"></i> Choose Theme
+    </button>
   </div>
   <div style="border-top:1px solid var(--border);padding:6px 0 8px">
     <button class="mob-si" style="color:#ef4444" onclick="closeMobileSheet();logout()"><i class="fas fa-sign-out-alt" style="color:#ef4444"></i>Sign Out</button>
@@ -777,25 +776,72 @@ function toggleDark() {
   localStorage.setItem('nxdark', isDark ? '1' : '0');
   api('/api/users/me', { method: 'PUT', body: JSON.stringify({ is_dark_mode: isDark ? 1 : 0 }) });
 }
-const _themes = ['t-ocean','t-emerald','t-violet','t-rose','t-amber'];
-function setTheme(t) {
-  document.body.classList.remove(..._themes);
+const _templates = ['tmpl-executive','tmpl-slate','tmpl-parchment','tmpl-arctic','tmpl-carbon','tmpl-graphite','tmpl-crimson'];
+const _TMPL_META = {
+  '':              { label:'Default',   desc:'Indigo & white — classic professional', nav:'#ffffff', card:'#f3f4f8', accent:'#6366f1', text:'#1e1b3a' },
+  'tmpl-executive':{ label:'Executive', desc:'Navy & gold — premium finance',          nav:'#0d1425', card:'#070c18', accent:'#c9a227', text:'#e8ecf8' },
+  'tmpl-slate':    { label:'Slate',     desc:'Dark blue-gray — enterprise corporate',  nav:'#1a2238', card:'#141b2d', accent:'#4f8ef7', text:'#dde4f8' },
+  'tmpl-parchment':{ label:'Parchment', desc:'Warm cream & amber — editorial style',   nav:'#faf6ee', card:'#f2ece0', accent:'#92400e', text:'#2a1f0e' },
+  'tmpl-arctic':   { label:'Arctic',    desc:'Crisp white & teal — minimal corporate', nav:'#ffffff', card:'#edf2f7', accent:'#0d9488', text:'#1a2535' },
+  'tmpl-carbon':   { label:'Carbon',    desc:'Near-black & emerald — developer dark',  nav:'#0d0d0d', card:'#0a0a0a', accent:'#22c55e', text:'#f0f0f0' },
+  'tmpl-graphite': { label:'Graphite',  desc:'Charcoal & violet — creative agency',    nav:'#1a1c28', card:'#16181f', accent:'#a855f7', text:'#dce0f0' },
+  'tmpl-crimson':  { label:'Crimson',   desc:'Clean white & deep red — bold consulting', nav:'#ffffff', card:'#f8f4f4', accent:'#be123c', text:'#1a0808' },
+};
+const _darkTemplates = new Set(['tmpl-executive','tmpl-slate','tmpl-carbon','tmpl-graphite']);
+function setTemplate(t) {
+  document.body.classList.remove(..._templates);
   if (t) document.body.classList.add(t);
-  localStorage.setItem('nx-theme', t || '');
-  // highlight active swatch in desktop menu
-  ['t-default','t-ocean','t-emerald','t-violet','t-rose','t-amber'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.boxShadow = '';
-  });
-  const activeId = t || 't-default';
-  const act = document.getElementById(activeId);
-  if (act) act.style.boxShadow = '0 0 0 3px var(--primary),0 0 0 5px var(--card)';
-  closeMe();
+  localStorage.setItem('nx-template', t || '');
+  if (_darkTemplates.has(t)) document.body.classList.add('dark');
+  else if (t) document.body.classList.remove('dark');
+  closeModal(); closeMe();
+  toast(((_TMPL_META[t||'']||{}).label || 'Default') + ' theme applied');
 }
-// Apply saved theme immediately on boot
+// Legacy setTheme — maps to setTemplate for backward compat
+function setTheme(t) { setTemplate(''); }
+function showTemplatePicker() {
+  closeMe(); if (typeof closeMobileSheet === 'function') closeMobileSheet();
+  const cur = localStorage.getItem('nx-template') || '';
+  const order = ['','tmpl-arctic','tmpl-parchment','tmpl-crimson','tmpl-executive','tmpl-slate','tmpl-carbon','tmpl-graphite'];
+  const cards = order.map(key => {
+    const m = _TMPL_META[key]; const active = key === cur;
+    const ring = active ? `box-shadow:0 0 0 3px ${m.accent};border-color:${m.accent}` : `border-color:${m.accent}30`;
+    return `<div onclick="setTemplate('${key}')" style="cursor:pointer;border-radius:12px;overflow:hidden;border:2px solid;${ring};transition:all .18s;width:150px;flex-shrink:0">
+      <div style="height:20px;background:${m.nav};border-bottom:1px solid ${m.accent}28;display:flex;align-items:center;gap:5px;padding:0 8px">
+        <div style="width:10px;height:10px;border-radius:4px;background:${m.accent}"></div>
+        <div style="height:3px;background:${m.accent}40;border-radius:2px;flex:1"></div>
+        <div style="width:13px;height:13px;border-radius:50%;background:${m.accent}55"></div>
+      </div>
+      <div style="background:${m.card};padding:8px">
+        <div style="height:4px;background:${m.text}18;border-radius:3px;margin-bottom:4px;width:88%"></div>
+        <div style="height:3px;background:${m.text}12;border-radius:3px;margin-bottom:7px;width:60%"></div>
+        <div style="background:${m.nav};border:1px solid ${m.accent}22;border-radius:6px;padding:6px;margin-bottom:6px">
+          <div style="height:3px;background:${m.text}18;border-radius:2px;margin-bottom:3px;width:85%"></div>
+          <div style="height:3px;background:${m.text}12;border-radius:2px;width:55%"></div>
+        </div>
+        <div style="background:${m.accent};border-radius:5px;height:16px;width:65%"></div>
+      </div>
+      <div style="background:${m.card};padding:2px 8px 8px;border-top:1px solid ${m.accent}18">
+        <span style="font-size:12px;font-weight:700;color:${m.text}">${m.label}${active?' ✓':''}</span><br>
+        <span style="font-size:10px;color:${m.text};opacity:.5;line-height:1.3">${m.desc}</span>
+      </div>
+    </div>`;
+  }).join('');
+  showModal(`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <h2 style="margin:0">Choose Theme</h2>
+    <span style="font-size:12px;color:var(--sub)">Applies instantly</span>
+  </div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">${cards}</div>`);
+  const modal = document.querySelector('#mbg .modal');
+  if (modal) { modal.style.maxWidth = '740px'; modal.style.width = '95vw'; }
+}
+// Boot: restore saved template
 (function() {
-  const saved = localStorage.getItem('nx-theme');
-  if (saved) { document.body.classList.remove(...['t-ocean','t-emerald','t-violet','t-rose','t-amber']); document.body.classList.add(saved); }
+  const saved = localStorage.getItem('nx-template');
+  if (saved && ['tmpl-executive','tmpl-slate','tmpl-parchment','tmpl-arctic','tmpl-carbon','tmpl-graphite','tmpl-crimson'].includes(saved)) {
+    document.body.classList.add(saved);
+    if (['tmpl-executive','tmpl-slate','tmpl-carbon','tmpl-graphite'].includes(saved)) document.body.classList.add('dark');
+  }
 })();
 function toggleMeMenu() {
   const menu = document.getElementById('me-menu');
@@ -3068,6 +3114,7 @@ function showApply(id, title) {
 async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } closeModal(); toast('Applied! 🎉'); renderJobs(); }
 function showPostJob() {
   showModal(`<h2 style="margin-bottom:16px">Post a Job</h2>
+    <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Enargin-bottom:16px">Post a Job</h2>
     <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Engineer"></div><div class="fg"><label>Company *</label><input id="pjco" placeholder="Company name"></div></div>
     <div class="frow"><div class="fg"><label>Location</label><input id="pjlo" placeholder="City or Remote"></div><div class="fg"><label>Type</label><select id="pjty"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
     <div class="fg"><label>Salary Range</label><input id="pjsa" placeholder="12-18 LPA"></div>
