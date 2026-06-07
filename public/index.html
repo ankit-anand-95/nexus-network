@@ -598,13 +598,13 @@ const _postObserver = typeof IntersectionObserver !== 'undefined' ? new Intersec
     if (!pid) return;
     if (e.isIntersecting) {
       if (!_seenPosts.has(pid) && !_pendingViews.has(pid)) {
-        // Must be visible for 1.5s before counting as a view
+        // Must be visible for 0.8s before counting as a view
         _pendingViews.set(pid, setTimeout(() => {
           _pendingViews.delete(pid);
           if (_seenPosts.has(pid)) return;
           _seenPosts.add(pid);
           fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: [pid] }) }).catch(()=>{});
-        }, 1500));
+        }, 800));
       }
     } else {
       // Left viewport before 1.5s — cancel
@@ -648,13 +648,14 @@ function apiInvalidate(prefix) {
   if (!prefix) { _apiCache.clear(); return; }
   for (const k of _apiCache.keys()) { if (k.startsWith(prefix)) _apiCache.delete(k); }
 }
-function av(u, cls = 'av40') {
+function av(u, cls = 'av40', onclick = '') {
   const n = (u?.name || u?.author_name || 'U');
   const l = n[0].toUpperCase();
   const s = u?.avatar_url || u?.author_avatar;
-  return s
-    ? `<img src="${s}" class="av ${cls}" style="object-fit:cover;border-radius:50%" onerror="this.outerHTML='<div class=&quot;av ${cls}&quot;>${l}</div>'">`
-    : `<div class="av ${cls}">${l}</div>`;
+  const img = s
+    ? `<img src="${s}" class="av ${cls}" style="object-fit:cover;border-radius:50%" onerror="this.outerHTML='<div class=&quot;av ${cls}&quot; ${onclick?'onclick=&quot;'+onclick+'&quot;':''} style=&quot;${onclick?'cursor:pointer':''}&quot;>${l}</div>'">`
+    : `<div class="av ${cls}" ${onclick ? `onclick="${onclick}" style="cursor:pointer"` : ''}>${l}</div>`;
+  return onclick ? `<span onclick="${onclick}" style="cursor:pointer;display:inline-flex;flex-shrink:0">${img}</span>` : img;
 }
 function timeAgo(d) {
   if (!d) return '';
@@ -1604,8 +1605,8 @@ function renderPost(p) {
   const reactCountsHtml = `<div class="react-counts">${_renderRxCounts(p.reactions || [])}</div>`;
   const anonAv = `<div class="av av40" style="background:linear-gradient(135deg,#1f2937,#4b5563);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%" title="Anonymous"><i class="fas fa-user-secret" style="color:rgba(255,255,255,.9);font-size:20px"></i></div>`;
   const safeContent = (p.content||'').replace(/\\/g,'\\\\').replace(/'/g,'&apos;').replace(/\n/g,'\\n');
-  return `<div id="pc-${p.id}" class="card post-card">
-    <div class="post-hdr">${p.is_anonymous ? anonAv : av(p, 'av40')}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge"><i class="fas fa-user-secret" style="margin-right:4px;font-size:10px"></i>Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${escHtml(p.author_name || 'Nexus Member')}</a>`}</h4><p>${escHtml(p.author_headline || '')}${p.author_headline ? ' &bull; ' : ''}${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>
+  return `<div id="pc-${p.id}" class="card post-card" data-pid="${p.id}">
+    <div class="post-hdr">${p.is_anonymous ? anonAv : av(p, 'av40', `go('profile',${p.author_id})`)}<div class="pinfo"><h4>${p.is_anonymous ? '<span class="anon-badge"><i class="fas fa-user-secret" style="margin-right:4px;font-size:10px"></i>Anonymous</span>' : `<a href="#" onclick="go('profile',${p.author_id})" style="color:var(--text);text-decoration:none">${escHtml(p.author_name || 'Nexus Member')}</a>`}</h4><p>${escHtml(p.author_headline || '')}${p.author_headline ? ' &bull; ' : ''}${timeAgo(p.created_at)}${p.scheduled_at && !p.is_published ? ' <span style="color:#f59e0b;font-size:11px">⏰ Scheduled</span>' : ''}</p></div>
     <div style="margin-left:auto;display:flex;gap:2px;align-items:center">
       ${!mine ? `<button class="flag-btn" onclick="flagContent('post',${p.id})" title="Report"><i class="fas fa-flag"></i></button>` : ''}
       ${mine ? `<button onclick="editPost(${p.id},'${safeContent}')" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Edit"><i class="fas fa-pen"></i></button><button onclick="delPost(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:13px;padding:6px" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
@@ -1616,7 +1617,14 @@ function renderPost(p) {
     ${reactCountsHtml}
     <div class="post-acts">
       <div class="react-wrap" id="rw-${p.id}">
-        <button class="pact react-btn${myReact ? ' liked' : ''}" onmouseenter="showReactPop(${p.id},this)" onmouseleave="startHideReactPop(${p.id})" onclick="window.matchMedia('(pointer:coarse)').matches?toggleReactPop(${p.id},this):reactPost(${p.id},'like')">${myReact ? `${_RX[myReact]} ${myReact[0].toUpperCase()+myReact.slice(1)}` : '👍 Like'}</button>
+        <button class="pact react-btn${myReact ? ' liked' : ''}"
+          onmouseenter="showReactPop(${p.id},this)"
+          onmouseleave="startHideReactPop(${p.id})"
+          onclick="reactPost(${p.id},'like')"
+          ontouchstart="_rxLongPress(${p.id},this,event)"
+          ontouchend="_rxLongPressCancel(${p.id})"
+          ontouchmove="_rxLongPressCancel(${p.id})"
+        >${myReact ? `${_RX[myReact]} ${myReact[0].toUpperCase()+myReact.slice(1)}` : '👍 Like'}</button>
       </div>
       <button class="pact" onclick="toggleComs(${p.id})"><i class="far fa-comment"></i> ${p.comments_count || 0}</button>
       <button class="pact" onclick="sharePost(${p.id})"><i class="fas fa-share-nodes"></i> Share</button>
@@ -1710,6 +1718,17 @@ function sharePost(id) { const url = window.location.origin + '?post=' + id; nav
 
 // ── REACTIONS ─────────────────────────────────────────────────────────────
 let _rxTimers = {}, _rxPop = null;
+let _rxLPTimer = null;
+function _rxLongPress(id, btn, e) {
+  _rxLPTimer = setTimeout(() => {
+    _rxLPTimer = null;
+    e.preventDefault();
+    showReactPop(id, btn);
+  }, 450);
+}
+function _rxLongPressCancel(id) {
+  if (_rxLPTimer) { clearTimeout(_rxLPTimer); _rxLPTimer = null; }
+}
 function showReactPop(id, btn) {
   clearTimeout(_rxTimers[id]); clearTimeout(_rxTimers['auto_' + id]);
   if (_rxPop && _rxPop.dataset.pid != id) { _rxPop.remove(); _rxPop = null; }
