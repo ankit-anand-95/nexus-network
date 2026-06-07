@@ -455,6 +455,7 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 .flag-btn:hover{color:#ef4444;background:#fef2f2}
 /* ACCOUNT WARNING TOAST */
 .acct-warn{position:fixed;top:70px;right:16px;background:#fffbeb;border:1.5px solid #f59e0b;border-radius:var(--r);padding:14px 18px;max-width:340px;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.15);animation:fadeIn .2s ease}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12);box-shadow:0 0 0 4px rgba(99,102,241,.3)}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
@@ -963,7 +964,10 @@ function initSocket() {
     const newCard = div.firstElementChild;
     feed.insertBefore(newCard, feed.firstChild);
     setTimeout(_sendVisiblePostViews, 500);
-    // Refresh right sidebar trending with slight delay (let server cache update)
+    // Show "new post" pulse on sort-new button to nudge user
+    const rnBtn = document.getElementById('sort-new');
+    if (rnBtn) { rnBtn.style.animation = 'pulse 0.6s 2'; setTimeout(() => { if(rnBtn) rnBtn.style.animation = ''; }, 1200); }
+    // Refresh right sidebar trending
     setTimeout(() => { if (curPage === 'home') renderRightSidebar(); }, 1500);
   });
 
@@ -985,6 +989,8 @@ function initSocket() {
     const card = document.getElementById('pc-' + postId); if (!card) return;
     const btns = card.querySelectorAll('.pact');
     if (btns[1]) btns[1].innerHTML = `<i class="far fa-comment"></i> ${comments_count}`;
+    const pd = postsData.find(p => p.id === postId);
+    if (pd) pd.comment_count = comments_count;
   });
 
   socket.on('post_edited', ({ postId, content }) => {
@@ -1102,12 +1108,23 @@ function initSocket() {
   });
 
   socket.on('post_reacted', ({ postId, reactions, my_reaction_by }) => {
-    // Update reaction chips for all viewers (the reactor's button was already updated via API)
     const rc = document.querySelector('#pc-' + postId + ' .react-counts');
     if (rc) rc.innerHTML = _renderRxCounts(reactions);
-    // If the reactor is me, also update the button state (confirmation)
-    if (my_reaction_by === me?.id) {
-      // already handled by reactPost() → _updateReact()
+    // Update in-memory postsData reaction count for eventual sort consistency
+    const pd = postsData.find(p => p.id === postId);
+    if (pd) {
+      pd.reaction_count = reactions.reduce((s, r) => s + (r.count || 0), 0);
+      pd.reactions = reactions;
+    }
+    // Re-sort feed if on Top mode (debounced)
+    if (_feedSort !== 'new') {
+      clearTimeout(window._rsortTimer);
+      window._rsortTimer = setTimeout(() => {
+        if (_feedSort !== 'new' && postsData.length > 1) {
+          postsData.sort((a, b) => (b.reaction_count||0) - (a.reaction_count||0) || (b.comment_count||0) - (a.comment_count||0));
+          renderFeed(postsData);
+        }
+      }, 2000); // 2s debounce so UI doesn't jump immediately
     }
   });
 
@@ -1878,10 +1895,20 @@ function openEmojiPicker(targetId, btn) {
   const pop = document.createElement('div');
   pop.className = 'emoji-pop'; pop.id = 'epop';
   pop.innerHTML = _EMOJIS.map(e => `<button onclick="insertEmoji('${targetId}','${e}')">${e}</button>`).join('');
-  const rect = btn.getBoundingClientRect();
-  pop.style.top = Math.max(8, rect.top - 220) + 'px';
-  pop.style.left = rect.left + 'px';
   document.body.appendChild(pop);
+  // Position after appending so we know the actual size
+  const rect = btn.getBoundingClientRect();
+  const ph = pop.offsetHeight || 220;
+  const pw = pop.offsetWidth || 220;
+  // Prefer opening below; fall back above if not enough space below
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  const spaceAbove = rect.top - 8;
+  let top = spaceBelow >= ph ? rect.bottom + 4 : rect.top - ph - 4;
+  top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+  let left = rect.left;
+  left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
   _emojiPopEl = pop;
   setTimeout(() => document.addEventListener('click', function _ec(e) {
     if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); _emojiPopEl = null; document.removeEventListener('click', _ec); }
