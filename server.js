@@ -661,8 +661,8 @@ app.get('/api/connections/suggestions', auth, (req, res) => {
   // Show 2nd-degree (friends-of-friends) first, then everyone else not yet connected
   const suggestions = db.prepare(`
     SELECT u.id, u.name, u.headline, u.avatar_url, u.current_position,
-      COUNT(DISTINCT bridge.mid) AS mutual_count,
-      CASE WHEN COUNT(DISTINCT bridge.mid) > 0 THEN '2nd' ELSE '3rd' END AS degree
+      COUNT(DISTINCT myconn.mid) AS mutual_count,
+      CASE WHEN COUNT(DISTINCT myconn.mid) > 0 THEN '2nd' ELSE '3rd' END AS degree
     FROM users u
     LEFT JOIN (
       SELECT CASE WHEN c1.requester_id=? THEN c1.addressee_id ELSE c1.requester_id END AS mid
@@ -1454,7 +1454,7 @@ const _analyticsCache = new Map();
 app.get('/api/analytics/me', auth, (req, res) => {
   const uid = req.user.id;
   console.log('[analytics] GET uid=' + uid);
-  const views = db.prepare('SELECT COUNT(DISTINCT viewer_id) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime("now","-30 days")').get(uid);
+  const views = db.prepare("SELECT COUNT(DISTINCT viewer_id) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime('now','-30 days')").get(uid);
   const row = db.prepare(`
     SELECT
       COUNT(DISTINCT pr.id) as rx_count,
