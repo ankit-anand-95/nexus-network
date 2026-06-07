@@ -641,7 +641,9 @@ const _postObserver = typeof IntersectionObserver !== 'undefined' ? new Intersec
           _pendingViews.delete(pid);
           if (_seenPosts.has(pid)) return;
           _seenPosts.add(pid);
-          fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: [pid] }) }).catch(()=>{});
+          console.log('[impressions] observer recording pid:', pid);
+          fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: [pid] }) })
+            .then(r=>r.json()).then(d=>console.log('[impressions] observer result:', d)).catch(e=>console.error('[impressions] err:', e));
         }, 800));
       }
     } else {
@@ -1655,7 +1657,12 @@ function renderFeed(ps) {
       .filter(pid => pid && !_seenPosts.has(pid));
     if (pids.length) {
       pids.forEach(pid => _seenPosts.add(pid));
-      fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: pids }) }).catch(()=>{});
+      console.log('[impressions] sending batch:', pids);
+      fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: pids }) })
+        .then(r => r.json()).then(d => console.log('[impressions] result:', d))
+        .catch(e => console.error('[impressions] fetch error:', e));
+    } else {
+      console.log('[impressions] no new visible posts (seen:', _seenPosts.size, ')');
     }
   }, 2000);
 }

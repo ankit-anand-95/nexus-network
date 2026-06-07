@@ -1474,18 +1474,21 @@ app.get('/api/analytics/me', auth, (req, res) => {
 // ── POST VIEW TRACKING (batch) ────────────────────────────────────────────
 app.post('/api/posts/viewed', auth, (req, res) => {
   const { post_ids } = req.body;
+  console.log('[post-view] received ids=' + JSON.stringify(post_ids) + ' viewer=' + req.user.id);
   if (!Array.isArray(post_ids) || !post_ids.length) return res.json({ ok: true });
   const viewerId = req.user.id;
+  let inserted = 0;
   const stmt = db.prepare('INSERT OR IGNORE INTO post_views (post_id, viewer_id) VALUES (?, ?)');
   post_ids.forEach(pid => {
     const postId = parseInt(pid);
     if (!postId) return;
-    // Don't count own posts
     const post = db.prepare('SELECT author_id FROM posts WHERE id=?').get(postId);
+    console.log('[post-view] pid=' + postId + ' author=' + post?.author_id + ' viewer=' + viewerId + ' skip=' + (post?.author_id === viewerId));
     if (!post || post.author_id === viewerId) return;
-    try { stmt.run(postId, viewerId); } catch(e) {}
+    try { const r = stmt.run(postId, viewerId); inserted += r.changes; } catch(e) { console.error('[post-view] err:', e.message); }
   });
-  res.json({ ok: true });
+  console.log('[post-view] inserted=' + inserted);
+  res.json({ ok: true, inserted });
 });
 
 // ── PROFILE VIEW TRACKING ─────────────────────────────────────────────────
