@@ -1311,7 +1311,8 @@ function renderAF(m, resetToken) {
     <div id="aerr"></div>
     ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" name="name" placeholder="Your full name" autocomplete="name"></div>' : ''}
     <div class="fg"><label>Email</label><input id="ae" type="email" name="email" placeholder="you@example.com" autocomplete="${il ? 'email' : 'off'}"></div>
-    <div class="fg"><label>Password</label><input id="ap" type="password" name="password" placeholder="Password" autocomplete="${il ? 'current-password' : 'new-password'}" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
+    <div class="fg"><label>Password</label><input id="ap" type="password" name="password" placeholder="${il ? 'Password' : 'Min 6 characters'}" autocomplete="${il ? 'current-password' : 'new-password'}" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
+    ${!il ? '<div class="fg"><label>Confirm Password</label><input id="ap2" type="password" name="confirm-password" placeholder="Repeat password" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')doAuth(\'register\')"></div>' : ''}
     ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" autocomplete="off" placeholder="e.g. Software Engineer at Google"></div>' : ''}
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
     <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>
@@ -1325,6 +1326,9 @@ async function doAuth(m) {
   if (m === 'register') {
     const n = document.getElementById('an')?.value.trim();
     if (!n) { el.innerHTML = '<div class="err">Name required</div>'; return; }
+    if (p.length < 6) { el.innerHTML = '<div class="err">Password must be at least 6 characters</div>'; return; }
+    const p2 = document.getElementById('ap2')?.value;
+    if (p !== p2) { el.innerHTML = '<div class="err">Passwords do not match</div>'; return; }
     body = { ...body, name: n, headline: document.getElementById('ah')?.value.trim() };
   }
   const r = await api('/api/auth/' + m, { method: 'POST', body: JSON.stringify(body) });
@@ -1450,7 +1454,7 @@ async function renderSearch(q) {
           : cs === 'pending'
           ? `<button class="btn btn-g btn-sm" disabled>Pending</button>`
           : `<button class="btn btn-p btn-sm" onclick="sendConn(${u.id},this)"><i class="fas fa-user-plus"></i> Connect</button>`;
-        return `<div class="prow">${av(u, 'av48')}<div class="pinfo"><h4><a href="#" onclick="go('profile',${u.id})" style="color:var(--text)">${u.name}</a> <span class="chip chip-p" style="font-size:10px;padding:2px 6px">${deg}°</span></h4><p>${u.headline || u.current_position || 'Nexus member'}</p>${u.location ? `<p style="font-size:11px;margin-top:3px"><i class="fas fa-location-dot"></i> ${u.location}</p>` : ''}</div>${btn}</div>`;
+        return `<div class="prow">${av(u, 'av48')}<div class="pinfo"><h4><a href="#" onclick="go('profile',${u.id})" style="color:var(--text)">${u.name}</a></h4><p>${u.headline || u.current_position || 'Nexus member'}</p>${u.location ? `<p style="font-size:11px;margin-top:3px"><i class="fas fa-location-dot"></i> ${u.location}</p>` : ''}</div>${btn}</div>`;
       }).join('');
       html += '</div>';
     }
@@ -2152,7 +2156,7 @@ async function removeConn(id) {
 async function renderNetwork() {
   const [co, rq, sg] = await Promise.all([api('/api/connections'), api('/api/connections/requests'), api('/api/connections/suggestions')]);
   const sugHtml = Array.isArray(sg) && sg.length
-    ? sg.map(s => `<div class="sug-card">${av(s, 'av56')}<div style="margin:6px 0 4px"><span class="chip chip-p" style="font-size:10px;padding:2px 7px">${s.degree || '3rd'}°</span>${s.mutual_count > 0 ? ` <span style="font-size:11px;color:var(--sub)">${s.mutual_count} mutual</span>` : ''}</div><h4>${s.name}</h4><p>${s.headline || s.current_position || 'Nexus member'}</p><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="sendConn(${s.id},this)"><i class="fas fa-user-plus"></i> Connect</button></div>`).join('')
+    ? sg.map(s => `<div class="sug-card">${av(s, 'av56')}${s.mutual_count > 0 ? `<p style="font-size:11px;color:var(--sub);margin:6px 0 2px"><i class="fas fa-user-group" style="margin-right:4px"></i>${s.mutual_count} mutual connection${s.mutual_count > 1 ? 's' : ''}</p>` : '<div style="margin-top:6px"></div>'}<h4>${s.name}</h4><p>${s.headline || s.current_position || 'Nexus member'}</p><button class="btn btn-o btn-sm" style="width:100%;justify-content:center" onclick="sendConn(${s.id},this)"><i class="fas fa-user-plus"></i> Connect</button></div>`).join('')
     : `<div style="text-align:center;padding:32px;color:var(--sub);grid-column:1/-1"><i class="fas fa-users" style="font-size:40px;opacity:.2;display:block;margin-bottom:12px"></i><p style="font-weight:600;margin-bottom:6px">No suggestions yet</p><p style="font-size:13px">Use the <strong>search bar</strong> to find people by name, company, or headline.</p></div>`;
   document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
     ${Array.isArray(rq) && rq.length ? `<div class="card" style="margin-bottom:16px"><div class="ch">Invitations <span class="chip chip-p">${rq.length}</span></div>${rq.map(r => `<div class="prow">${av(r, 'av48')}<div class="pinfo"><h4>${r.name}</h4><p>${r.headline || ''}</p><time style="font-size:11px;color:var(--sub)">${timeAgo(r.created_at)}</time></div><button class="btn btn-p btn-sm" onclick="actConn(${r.connection_id},'accept',this)">Accept</button><button class="btn btn-o btn-sm" style="margin-left:6px" onclick="actConn(${r.connection_id},'decline',this)">Decline</button></div>`).join('')}</div>` : ''}

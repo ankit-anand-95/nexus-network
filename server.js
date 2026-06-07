@@ -368,9 +368,11 @@ app.get('/api/posts', auth, (req, res) => {
   const me = db.prepare(`SELECT email FROM users WHERE id=?`).get(req.user.id);
   const isDemo = me?.email === DEMO_EMAIL;
 
+  // discover=1 → show all posts (used when user has 0 connections)
+  const discover = req.query.discover === '1';
   // Non-demo users only see posts from themselves + their connections
-  // Demo user sees everything (useful for testing seed data)
-  const feedFilter = isDemo
+  // Demo user or discover mode sees everything
+  const feedFilter = (isDemo || discover)
     ? `WHERE p.is_published = 1`
     : `WHERE p.is_published = 1 AND (
         p.author_id = ? OR
@@ -379,7 +381,7 @@ app.get('/api/posts', auth, (req, res) => {
           FROM connections WHERE (requester_id=? OR addressee_id=?) AND status='accepted'
         )
       )`;
-  const feedParams = isDemo
+  const feedParams = (isDemo || discover)
     ? [req.user.id, limit, offset]
     : [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset];
 
@@ -1589,12 +1591,8 @@ app.get('/api/posts/saved', auth, (req, res) => {
 });
 
 // ── TRENDING TOPICS ───────────────────────────────────────────────────────
-let _trendingCache = null, _trendingTs = 0;
 app.get('/api/trending', auth, (req, res) => {
-  // Serve from cache if < 5 minutes old
-  if (_trendingCache && Date.now() - _trendingTs < 5 * 60 * 1000) {
-    return res.json(_trendingCache);
-  }
+  // Top posts filtered to user's own posts + connections only
   const topPosts = db.prepare(`
     SELECT p.id, p.content, u.name as author_name, u.avatar_url as author_avatar,
       COUNT(pr.id) as reaction_count, COUNT(DISTINCT c.id) as comment_count
@@ -1604,10 +1602,17 @@ app.get('/api/trending', auth, (req, res) => {
     LEFT JOIN comments c ON c.post_id=p.id
     WHERE p.is_published=1 AND p.is_anonymous=0
       AND p.created_at > datetime('now','-7 days')
+      AND (
+        p.author_id = ? OR
+        p.author_id IN (
+          SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
+          FROM connections WHERE (requester_id=? OR addressee_id=?) AND status='accepted'
+        )
+      )
     GROUP BY p.id
     ORDER BY reaction_count DESC, comment_count DESC
     LIMIT 5
-  `).all();
+  `).all(req.user.id, req.user.id, req.user.id, req.user.id);
   const tagRows = db.prepare(`
     SELECT content FROM posts
     WHERE is_published=1 AND created_at > datetime('now','-7 days')
@@ -1620,9 +1625,7 @@ app.get('/api/trending', auth, (req, res) => {
     tags.forEach(t => { tagCount[t.toLowerCase()] = (tagCount[t.toLowerCase()] || 0) + 1; });
   });
   const trending_tags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag, count]) => ({ tag, count }));
-  _trendingCache = { top_posts: topPosts, trending_tags };
-  _trendingTs = Date.now();
-  res.json(_trendingCache);
+  res.json({ top_posts: topPosts, trending_tags });
 });
 
 server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`))
