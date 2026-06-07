@@ -1429,7 +1429,11 @@ io.on('connection', socket => {
   socket.on('mark_read', ({ from }) => {
     if (!socket.userId || !from) return;
     db.prepare('UPDATE messages SET is_read=1 WHERE sender_id=? AND receiver_id=? AND is_read=0').run(from, socket.userId);
+    // Tell the sender their messages were read (tick marks)
     io.to(`user_${from}`).emit('read_receipt', { by: socket.userId });
+    // Tell ALL devices of the reader to sync their badge count
+    const unread = db.prepare('SELECT COUNT(*) as n FROM messages WHERE receiver_id=? AND is_read=0').get(socket.userId)?.n || 0;
+    io.to(`user_${socket.userId}`).emit('badge_sync', { unread_messages: unread });
   });
   socket.on('get_presence', ({ userId }) => {
     const online = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;

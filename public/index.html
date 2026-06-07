@@ -797,13 +797,21 @@ function initSocket() {
           .then(r => r.json()).then(b => { if (b && !b.error) updBadge('mbadge', b.unread_messages || 0); }).catch(() => {});
         if (m.sender_name) toast(`💬 ${m.sender_name}: ${(m.content||'').substring(0,60)}`);
       } else {
-        // User is on messaging page but different chat open — just update thread list, no badge
+        // On messaging page but different chat — update thread list and badge
         refreshThreads();
+        fetch('/api/notifications/badges', { headers: { Authorization: 'Bearer ' + token } })
+          .then(r => r.json()).then(b => { if (b && !b.error) updBadge('mbadge', b.unread_messages || 0); }).catch(() => {});
       }
     }
   });
 
   // Read receipts — my sent messages turn blue tick when receiver reads
+  // Sync badge across all devices when any device marks messages as read
+  socket.on('badge_sync', ({ unread_messages }) => {
+    updBadge('mbadge', unread_messages || 0);
+    // Also refresh thread list so dots disappear
+    if (curPage === 'messaging') refreshThreads();
+  });
   socket.on('read_receipt', ({ by }) => {
     if (achat == by) document.querySelectorAll('#cmsgs .bub.mine .tick').forEach(t => { t.className = 'tick read'; t.innerHTML = '<i class="fas fa-check-double"></i>'; });
   });
@@ -1997,10 +2005,7 @@ async function openChat(uid, name) {
   document.querySelectorAll('.mthread').forEach(e => e.classList.remove('active'));
   document.getElementById('mt-' + uid)?.classList.add('active');
   if (socket) { socket.emit('join_chat', uid); socket.emit('mark_read', { from: uid }); }
-  // Re-fetch badge count from server (marks this thread as read on server via mark_read)
-  setTimeout(() => api('/api/notifications/badges', {}, true).then(r => {
-    if (r && !r.error) updBadge('mbadge', r.unread_messages || 0);
-  }), 600);
+  // Badge will be updated in real-time via badge_sync socket event after mark_read
   // Mobile: show chat full-screen
   const mlay = document.getElementById('mlay');
   if (mlay) mlay.classList.add('chat-open');
