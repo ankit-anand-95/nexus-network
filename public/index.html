@@ -128,7 +128,7 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .pact.save-btn{color:var(--sub)}
 .emoji-trig{background:none;border:none;cursor:pointer;color:var(--sub);font-size:18px;padding:6px 10px;border-radius:8px;transition:.12s;flex-shrink:0;display:flex;align-items:center}
 .emoji-trig:hover{background:var(--indigo-light);color:var(--primary)}
-.pact.liked{color:var(--primary)}
+.pact.liked{color:var(--primary);font-weight:700}
 .anon-badge{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
 
 /* POLL */
@@ -719,6 +719,7 @@ function closeMe() { const m = document.getElementById('me-menu'); if (m) m.styl
 document.addEventListener('click', e => {
   if (!document.getElementById('me-wrap')?.contains(e.target)) closeMe();
   if (!e.target.closest('.nav-srch')) hideSearchDrop();
+  if (_rxPop && !e.target.closest('.react-pop') && !e.target.closest('.react-btn')) { _rxPop.remove(); _rxPop = null; }
 });
 function updateMobDarkBtn() {
   const isDark = document.body.classList.contains('dark');
@@ -1572,7 +1573,7 @@ function renderPost(p) {
     ${reactCountsHtml}
     <div class="post-acts">
       <div class="react-wrap" id="rw-${p.id}">
-        <button class="pact react-btn${myReact ? ' liked' : ''}" onmouseenter="showReactPop(${p.id},this)" onmouseleave="startHideReactPop(${p.id})" onclick="reactPost(${p.id},'like')">${myReact ? `${_RX[myReact]} ${myReact[0].toUpperCase()+myReact.slice(1)}` : '👍 Like'}</button>
+        <button class="pact react-btn${myReact ? ' liked' : ''}" onmouseenter="showReactPop(${p.id},this)" onmouseleave="startHideReactPop(${p.id})" onclick="window.matchMedia('(pointer:coarse)').matches?toggleReactPop(${p.id},this):reactPost(${p.id},'like')">${myReact ? `${_RX[myReact]} ${myReact[0].toUpperCase()+myReact.slice(1)}` : '👍 Like'}</button>
       </div>
       <button class="pact" onclick="toggleComs(${p.id})"><i class="far fa-comment"></i> ${p.comments_count || 0}</button>
       <button class="pact" onclick="sharePost(${p.id})"><i class="fas fa-share-nodes"></i> Share</button>
@@ -1684,6 +1685,10 @@ function showReactPop(id, btn) {
   document.body.appendChild(pop);
   _rxPop = pop;
 }
+function toggleReactPop(id, btn) {
+  if (_rxPop && _rxPop.dataset.pid == id) { _rxPop.remove(); _rxPop = null; }
+  else { showReactPop(id, btn); }
+}
 function startHideReactPop(id) {
   _rxTimers[id] = setTimeout(() => {
     if (_rxPop && _rxPop.dataset.pid == id) { _rxPop.remove(); _rxPop = null; }
@@ -1694,6 +1699,18 @@ async function reactPost(id, reaction) {
   const r = await api('/api/posts/' + id + '/react', { method: 'POST', body: JSON.stringify({ reaction }) });
   if (r.error) { toast(r.error); return; }
   _updateReact(id, r.reactions, r.my_reaction);
+  // Refresh analytics sidebar (impressions change with reactions)
+  apiInvalidate('/api/analytics/me');
+  api('/api/analytics/me').then(a => {
+    if (!a || a.error) return;
+    const v = document.getElementById('sb-views'); if (v) v.textContent = a.profile_views ?? 0;
+    const i = document.getElementById('sb-impr'); if (i) i.textContent = a.post_impressions ?? 0;
+    const rsA = document.getElementById('rs-analytics');
+    if (rsA) {
+      const rv = rsA.querySelector('.stat-val[data-key="views"]'); if (rv) rv.textContent = a.profile_views ?? 0;
+      const ri = rsA.querySelector('.stat-val[data-key="impr"]'); if (ri) ri.textContent = a.post_impressions ?? 0;
+    }
+  }).catch(()=>{});
 }
 function _updateReact(postId, reactions, myReact) {
   const card = document.getElementById('pc-' + postId); if (!card) return;
@@ -1799,7 +1816,13 @@ function editProfile() {
 }
 async function saveProfile() {
   const b = { name: document.getElementById('epn').value, headline: document.getElementById('eph').value, location: document.getElementById('epl').value, current_position: document.getElementById('epcp').value, about: document.getElementById('epa').value };
-  await api('/api/users/me', { method: 'PUT', body: JSON.stringify(b) }); me = { ...me, ...b }; closeModal(); renderProfile(); toast('Profile updated!');
+  await api('/api/users/me', { method: 'PUT', body: JSON.stringify(b) }); me = { ...me, ...b };
+  apiInvalidate('/api/users/me'); apiInvalidate('/api/users/' + me.id);
+  closeModal(); renderProfile();
+  // Also update sidebar elements immediately without waiting for re-render
+  const _sbn = document.getElementById('sb-name'); if (_sbn) _sbn.textContent = b.name || me.name;
+  const _sbh = document.getElementById('sb-hl'); if (_sbh) _sbh.textContent = b.headline || me.headline || '';
+  toast('Profile updated!');
 }
 async function uploadFile(inp, type) {
   const fd = new FormData(); fd.append('file', inp.files[0]); fd.append('type', type);
@@ -2090,11 +2113,11 @@ function closeMobileChat() {
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
 function _fmtNotifContent(text) {
-  // Replace raw ISO date strings with human-readable format
-  return text.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, iso => {
+  // Replace ISO date strings (with or without ms/Z) with local-timezone human-readable format
+  return text.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?/g, iso => {
     const d = new Date(iso);
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} at ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} UTC`;
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
   });
 }
 async function renderSaved() {
@@ -2871,3 +2894,4 @@ setTimeout(() => {
 </script>
 </body>
 </html>
+         

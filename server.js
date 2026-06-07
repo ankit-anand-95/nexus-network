@@ -1293,10 +1293,9 @@ app.patch('/api/sessions/:id/reschedule', auth, (req, res) => {
   db.prepare(`UPDATE interview_sessions SET scheduled_at=?, slot_key=?, status='pending', mentor_session_id=? WHERE id=?`).run(new_slot_key, new_slot_key, newMsId || null, session.id);
 
   const learner = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
-  const _sd = new Date(new_slot_key);
-  const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const readableSlot = _sd.toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  createNotif(session.expert_id, req.user.id, 'session_rescheduled', session.id, learner.name + ' rescheduled to ' + readableSlot + ' — please confirm');
+  // Store raw ISO slot key so the client renders it in the viewer's local timezone
+  const notifSlot = new Date(new_slot_key).toISOString ? new Date(new_slot_key).toISOString() : new_slot_key;
+  createNotif(session.expert_id, req.user.id, 'session_rescheduled', session.id, learner.name + ' rescheduled to ' + notifSlot + ' — please confirm');
   io.to('user_' + session.expert_id).emit('session_update', { sessionId: session.id, status: 'rescheduled', meta: { learnerName: learner.name, scheduledAt: new_slot_key } });
   res.json({ ok: true });
 });
