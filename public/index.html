@@ -1309,10 +1309,10 @@ function renderAF(m, resetToken) {
     <h2>${il ? 'Welcome back' : 'Join Nexus'}</h2>
     <p class="asub">${il ? 'Sign in to your professional network' : 'Build your professional presence'}</p>
     <div id="aerr"></div>
-    ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" placeholder="Your full name"></div>' : ''}
-    <div class="fg"><label>Email</label><input id="ae" type="email" name="email" placeholder="you@example.com" autocomplete="email"></div>
-    <div class="fg"><label>Password</label><input id="ap" type="password" name="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
-    ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" placeholder="e.g. Software Engineer at Google"></div>' : ''}
+    ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" name="name" placeholder="Your full name" autocomplete="name"></div>' : ''}
+    <div class="fg"><label>Email</label><input id="ae" type="email" name="email" placeholder="you@example.com" autocomplete="${il ? 'email' : 'off'}"></div>
+    <div class="fg"><label>Password</label><input id="ap" type="password" name="password" placeholder="Password" autocomplete="${il ? 'current-password' : 'new-password'}" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
+    ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" autocomplete="off" placeholder="e.g. Software Engineer at Google"></div>' : ''}
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
     <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>
     ${il ? '<p style="text-align:center;margin-top:6px;font-size:12px"><a href="#" onclick="renderAF(&apos;forgot&apos;)" style="color:var(--sub)">Forgot password?</a></p>' : ''}`;
