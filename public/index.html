@@ -771,6 +771,8 @@ function go(page, extra) {
   ({ home: renderHome, profile: renderProfile, network: renderNetwork, messaging: renderMessaging, notifications: renderNotifs, salary: renderSalary, reviews: renderReviews, experts: renderExperts, jobs: renderJobs, saved: renderSaved }[page] || renderHome)(extra);
 }
 function toggleDark() {
+  const activeTemplate = localStorage.getItem('nx-template') || '';
+  if (activeTemplate) { toast('Switch to Default theme to toggle dark mode'); return; }
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
   localStorage.setItem('nxdark', isDark ? '1' : '0');
