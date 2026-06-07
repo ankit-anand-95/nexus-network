@@ -589,6 +589,38 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 let token = localStorage.getItem('nxtoken') || '';
 let me = null, socket = null, postsData = [], curPage = 'home';
 
+// ── POST VIEW TRACKING via IntersectionObserver ──────────────────────────
+const _seenPosts = new Set();  // posts already sent to server this session
+const _pendingViews = new Map(); // postId -> timer
+const _postObserver = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    const pid = parseInt(e.target.dataset.pid || e.target.id?.replace('pc-',''));
+    if (!pid) return;
+    if (e.isIntersecting) {
+      if (!_seenPosts.has(pid) && !_pendingViews.has(pid)) {
+        // Must be visible for 1.5s before counting as a view
+        _pendingViews.set(pid, setTimeout(() => {
+          _pendingViews.delete(pid);
+          if (_seenPosts.has(pid)) return;
+          _seenPosts.add(pid);
+          fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: [pid] }) }).catch(()=>{});
+        }, 1500));
+      }
+    } else {
+      // Left viewport before 1.5s — cancel
+      const t = _pendingViews.get(pid);
+      if (t) { clearTimeout(t); _pendingViews.delete(pid); }
+    }
+  });
+}, { threshold: 0.5 }) : null;
+
+function observePosts() {
+  if (!_postObserver) return;
+  document.querySelectorAll('.post-card[id^="pc-"]').forEach(el => {
+    _postObserver.observe(el);
+  });
+}
+
 // ── HELPERS ───────────────────────────────────────────────────────────────
 const _apiCache = new Map();
 // Paths cached aggressively (2 min) — suggestions, jobs, user profile only
@@ -866,7 +898,9 @@ function initSocket() {
     if (feed.querySelector('#pc-' + p.id)) return; // already in DOM (race-condition guard)
     const div = document.createElement('div');
     div.innerHTML = renderPost(p);
-    feed.insertBefore(div.firstElementChild, feed.firstChild);
+    const newCard = div.firstElementChild;
+    feed.insertBefore(newCard, feed.firstChild);
+    if (_postObserver) _postObserver.observe(newCard);
     // Refresh right sidebar trending with slight delay (let server cache update)
     setTimeout(() => { if (curPage === 'home') renderRightSidebar(); }, 1500);
   });
@@ -1551,6 +1585,7 @@ function renderFeed(ps) {
   const el = document.getElementById('feed'); if (!el) return;
   if (!ps.length) { el.innerHTML = ''; return; }
   el.innerHTML = ps.map(renderPost).join('');
+  setTimeout(observePosts, 100); // observe newly rendered posts
 }
 function renderPost(p) {
   const mine = p.is_mine || p.author_id === me?.id;

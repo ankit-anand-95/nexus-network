@@ -1457,20 +1457,31 @@ io.on('connection', socket => {
 const _analyticsCache = new Map();
 app.get('/api/analytics/me', auth, (req, res) => {
   const uid = req.user.id;
-  console.log('[analytics] GET uid=' + uid);
   const views = db.prepare("SELECT COUNT(DISTINCT viewer_id) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime('now','-30 days')").get(uid);
-  const row = db.prepare(`
-    SELECT
-      COUNT(DISTINCT pr.id) as rx_count,
-      COUNT(DISTINCT c.id)  as cm_count,
-      COUNT(DISTINCT p.id)  as post_count
-    FROM posts p
-    LEFT JOIN post_reactions pr ON pr.post_id = p.id
-    LEFT JOIN comments c ON c.post_id = p.id
-    WHERE p.author_id = ?
+  const impressions = db.prepare(`
+    SELECT COUNT(pv.id) as c
+    FROM post_views pv
+    JOIN posts p ON pv.post_id = p.id
+    WHERE p.author_id = ? AND pv.viewed_at > datetime('now','-30 days')
   `).get(uid);
-  const impressions = (row?.rx_count || 0) * 8 + (row?.cm_count || 0) * 12 + (row?.post_count || 0) * 5;
-  res.json({ profile_views: views?.c || 0, post_impressions: impressions });
+  res.json({ profile_views: views?.c || 0, post_impressions: impressions?.c || 0 });
+});
+
+// ── POST VIEW TRACKING (batch) ────────────────────────────────────────────
+app.post('/api/posts/viewed', auth, (req, res) => {
+  const { post_ids } = req.body;
+  if (!Array.isArray(post_ids) || !post_ids.length) return res.json({ ok: true });
+  const viewerId = req.user.id;
+  const stmt = db.prepare('INSERT OR IGNORE INTO post_views (post_id, viewer_id) VALUES (?, ?)');
+  post_ids.forEach(pid => {
+    const postId = parseInt(pid);
+    if (!postId) return;
+    // Don't count own posts
+    const post = db.prepare('SELECT author_id FROM posts WHERE id=?').get(postId);
+    if (!post || post.author_id === viewerId) return;
+    try { stmt.run(postId, viewerId); } catch(e) {}
+  });
+  res.json({ ok: true });
 });
 
 // ── PROFILE VIEW TRACKING ─────────────────────────────────────────────────

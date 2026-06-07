@@ -297,6 +297,14 @@ const newTables = [
     viewer_id INTEGER,
     viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(profile_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS post_views (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL,
+    viewer_id INTEGER NOT NULL,
+    viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(post_id, viewer_id),
+    FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
   )`
 ];
 [...extraTables, ...newTables].forEach(sql => db.exec(sql));
@@ -327,6 +335,8 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes(post_id, user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_saved_posts_user ON saved_posts(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_profile_views_profile ON profile_views(profile_id, viewed_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_post_views_post ON post_views(post_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_post_views_viewer ON post_views(viewer_id)`,
 ];
 indexes.forEach(sql => { try { db.exec(sql); } catch(e) {} });
 
