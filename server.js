@@ -1449,15 +1449,12 @@ io.on('connection', socket => {
   });
 });
 
-server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`))
 // ── ANALYTICS ─────────────────────────────────────────────────────────────
 const _analyticsCache = new Map();
 app.get('/api/analytics/me', auth, (req, res) => {
   const uid = req.user.id;
-  const hit = _analyticsCache.get(uid);
-  if (hit && Date.now() - hit.ts < 60000) return res.json(hit.data);
+  console.log('[analytics] GET uid=' + uid);
   const views = db.prepare('SELECT COUNT(DISTINCT viewer_id) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime("now","-30 days")').get(uid);
-  // Single query: count reactions and comments for all user posts at once
   const row = db.prepare(`
     SELECT
       COUNT(DISTINCT pr.id) as rx_count,
@@ -1469,14 +1466,13 @@ app.get('/api/analytics/me', auth, (req, res) => {
     WHERE p.author_id = ?
   `).get(uid);
   const impressions = (row?.rx_count || 0) * 8 + (row?.cm_count || 0) * 12 + (row?.post_count || 0) * 5;
-  const data = { profile_views: views?.c || 0, post_impressions: impressions };
-  _analyticsCache.set(uid, { data, ts: Date.now() });
-  res.json(data);
+  res.json({ profile_views: views?.c || 0, post_impressions: impressions });
 });
 
 // ── PROFILE VIEW TRACKING ─────────────────────────────────────────────────
 app.post('/api/users/:id/view', auth, (req, res) => {
   const profileId = parseInt(req.params.id);
+  console.log('[view] POST profileId=' + profileId + ' viewerId=' + req.user.id);
   if (profileId === req.user.id) return res.json({ ok: true });
   try {
     // Unique per viewer per day: upsert (update viewed_at if already viewed today)
@@ -1498,13 +1494,13 @@ app.post('/api/users/:id/view', auth, (req, res) => {
     }
     _analyticsCache.delete(profileId);
     io.to(`user_${profileId}`).emit('analytics_update', { type: 'profile_view' });
-  } catch(e) { console.error('[view]', e.message); }
+  } catch(e) { console.error('[view] error:', e.message); }
   res.json({ ok: true });
 });
 
 // ── FOLLOWERS ─────────────────────────────────────────────────────────────
 app.get('/api/users/:id/follow', auth, (req, res) => {
-  const row = db.prepare('SELECT id FROM follows WHERE follower_id=? AND following_id=?').get(req.user.id, req.params.id);
+  const row = db.prepare('SELECT id FROM follows WHERE follower_id=? AND following_id=?').get(req.user.id, parseInt(req.params.id));
   res.json({ following: !!row });
 });
 app.post('/api/users/:id/follow', auth, (req, res) => {
@@ -1595,3 +1591,5 @@ app.get('/api/trending', auth, (req, res) => {
   _trendingTs = Date.now();
   res.json(_trendingCache);
 });
+
+server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`))
