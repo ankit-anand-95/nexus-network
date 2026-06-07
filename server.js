@@ -545,11 +545,14 @@ app.post('/api/posts/:id/react', auth, (req, res) => {
   const reactions = db.prepare(`SELECT reaction_type, COUNT(*) as count FROM post_reactions WHERE post_id=? GROUP BY reaction_type`).all(postId);
   const my_reaction = db.prepare(`SELECT reaction_type FROM post_reactions WHERE post_id=? AND user_id=?`).get(postId, req.user.id)?.reaction_type || null;
   io.emit('post_reacted', { postId: Number(postId), reactions, my_reaction_by: req.user.id, my_reaction });
-  // Notify post author that their post got engagement (post impressions update)
+  // Always clear analytics cache for post author on any reaction (self or others)
   const reactedPost = db.prepare(`SELECT author_id FROM posts WHERE id=?`).get(postId);
-  if (reactedPost?.author_id && reactedPost.author_id !== req.user.id) {
+  if (reactedPost?.author_id) {
     _analyticsCache.delete(reactedPost.author_id);
-    io.to(`user_${reactedPost.author_id}`).emit('analytics_update', { type: 'post_reaction' });
+    // Only push real-time update to other users; owner will re-fetch on their own action
+    if (reactedPost.author_id !== req.user.id) {
+      io.to(`user_${reactedPost.author_id}`).emit('analytics_update', { type: 'post_reaction' });
+    }
   }
   res.json({ reactions, my_reaction });
 });
@@ -1453,7 +1456,7 @@ app.get('/api/analytics/me', auth, (req, res) => {
   const uid = req.user.id;
   const hit = _analyticsCache.get(uid);
   if (hit && Date.now() - hit.ts < 60000) return res.json(hit.data);
-  const views = db.prepare('SELECT COUNT(*) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime("now","-30 days")').get(uid);
+  const views = db.prepare('SELECT COUNT(DISTINCT viewer_id) as c FROM profile_views WHERE profile_id=? AND viewed_at > datetime("now","-30 days")').get(uid);
   // Single query: count reactions and comments for all user posts at once
   const row = db.prepare(`
     SELECT
@@ -1476,12 +1479,26 @@ app.post('/api/users/:id/view', auth, (req, res) => {
   const profileId = parseInt(req.params.id);
   if (profileId === req.user.id) return res.json({ ok: true });
   try {
-    db.prepare('INSERT INTO profile_views (profile_id, viewer_id) VALUES (?, ?)').run(profileId, req.user.id);
-    // Invalidate server-side analytics cache for the profile owner
+    // Unique per viewer per day: upsert (update viewed_at if already viewed today)
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = db.prepare(
+      `SELECT id FROM profile_views WHERE profile_id=? AND viewer_id=? AND date(viewed_at)=?`
+    ).get(profileId, req.user.id, today);
+    if (existing) {
+      db.prepare(`UPDATE profile_views SET viewed_at=CURRENT_TIMESTAMP WHERE id=?`).run(existing.id);
+    } else {
+      db.prepare('INSERT INTO profile_views (profile_id, viewer_id) VALUES (?, ?)').run(profileId, req.user.id);
+      // New unique view for today — send notification, replacing any previous from same viewer
+      const viewer = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
+      if (viewer) {
+        // Delete any previous "viewed your profile" notification from this viewer to this profile owner
+        db.prepare(`DELETE FROM notifications WHERE user_id=? AND actor_id=? AND type='profile_view'`).run(profileId, req.user.id);
+        createNotif(profileId, req.user.id, 'profile_view', profileId, `${viewer.name} viewed your profile`);
+      }
+    }
     _analyticsCache.delete(profileId);
-    // Push real-time notification to the profile owner
     io.to(`user_${profileId}`).emit('analytics_update', { type: 'profile_view' });
-  } catch(e) {}
+  } catch(e) { console.error('[view]', e.message); }
   res.json({ ok: true });
 });
 
@@ -1497,29 +1514,6 @@ app.post('/api/users/:id/follow', auth, (req, res) => {
   if (existing) {
     db.prepare('DELETE FROM follows WHERE follower_id=? AND following_id=?').run(req.user.id, targetId);
     res.json({ following: false });
-  } else {
-    db.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?,?)').run(req.user.id, targetId);
-    const actor = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
-    if (actor) createNotif(targetId, req.user.id, 'follow', 0, `${actor.name} started following you`);
-    res.json({ following: true });
-  }
-});
-app.get('/api/users/:id/followers', auth, (req, res) => {
-  const rows = db.prepare('SELECT u.id, u.name, u.headline, u.avatar_url FROM follows f JOIN users u ON f.follower_id=u.id WHERE f.following_id=? LIMIT 50').all(req.params.id);
-  res.json(rows);
-});
-app.get('/api/users/:id/following', auth, (req, res) => {
-  const rows = db.prepare('SELECT u.id, u.name, u.headline, u.avatar_url FROM follows f JOIN users u ON f.following_id=u.id WHERE f.follower_id=? LIMIT 50').all(req.params.id);
-  res.json(rows);
-});
-
-// ── SAVED POSTS ───────────────────────────────────────────────────────────
-app.post('/api/posts/:id/save', auth, (req, res) => {
-  const postId = parseInt(req.params.id);
-  const existing = db.prepare('SELECT id FROM saved_posts WHERE user_id=? AND post_id=?').get(req.user.id, postId);
-  if (existing) {
-    db.prepare('DELETE FROM saved_posts WHERE user_id=? AND post_id=?').run(req.user.id, postId);
-    res.json({ saved: false });
   } else {
     db.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?,?)').run(req.user.id, targetId);
     const actor = db.prepare('SELECT name FROM users WHERE id=?').get(req.user.id);
