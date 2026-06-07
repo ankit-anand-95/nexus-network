@@ -83,7 +83,8 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--r-sm);border:none;cursor:pointer;font-size:13px;font-weight:700;transition:.15s;text-decoration:none}
 .btn-p{background:var(--primary);color:#fff}.btn-p:hover{background:var(--primary-dark)}
-.btn-o{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}.btn-o:hover{background:var(--indigo-light)}
+.btn-o{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}
+.btn-danger{background:#ef4444;color:#fff;border:none}.btn-o:hover{background:var(--indigo-light)}
 .btn-g{background:var(--inp);color:var(--sub);border:1.5px solid var(--border)}
 .btn-sm{padding:6px 13px;font-size:12px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -725,6 +726,18 @@ function showModal(html) {
   document.body.appendChild(bg);
 }
 function closeModal() { document.getElementById('mbg')?.remove(); }
+function showConfirm(msg, onYes, yesLabel='Delete', yesCls='btn-danger') {
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'mbg';
+  bg.innerHTML = `<div class="modal" style="max-width:360px;text-align:center">
+    <p style="font-size:15px;font-weight:600;margin:0 0 8px;color:var(--text)">${msg}</p>
+    <p style="font-size:13px;color:var(--sub);margin:0 0 24px">This action cannot be undone.</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-o" onclick="closeModal()" style="min-width:90px">Cancel</button>
+      <button class="btn ${yesCls}" onclick="closeModal();(${onYes.toString()})()" style="min-width:90px">${yesLabel}</button>
+    </div></div>`;
+  bg.addEventListener('click', e => { if (e.target === bg) closeModal(); });
+  document.body.appendChild(bg);
+}
 function updBadge(id, n) {
   const label = n > 99 ? '99+' : n;
   // Top nav badge
@@ -823,16 +836,17 @@ function closeMobileSheet() {
   setTimeout(() => { bg.style.display = 'none'; sh.style.display = 'none'; }, 300);
 }
 function logout() {
-  if (!confirm('Sign out of Nexus?')) return;
-  localStorage.removeItem('nxtoken');
-  localStorage.removeItem('nxdark');
-  token = ''; me = null;
-  if (socket) { socket.disconnect(); socket = null; }
-  clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
-  document.body.classList.remove('dark');
-  document.getElementById('appw').style.display = 'none';
-  showAuth('login');
-  toast('Signed out. See you soon!');
+  showConfirm('Sign out of Nexus?', () => {
+    localStorage.removeItem('nxtoken');
+    localStorage.removeItem('nxdark');
+    token = ''; me = null;
+    if (socket) { socket.disconnect(); socket = null; }
+    clearInterval(window._badgeTimer); clearInterval(window._chatPollTimer);
+    document.body.classList.remove('dark');
+    document.getElementById('appw').style.display = 'none';
+    showAuth('login');
+    toast('Signed out. See you soon!');
+  }, 'Sign out', 'btn-danger');
 }
 function initSocket() {
   if (typeof io === 'undefined') return;
@@ -1324,19 +1338,26 @@ function addRecentSearch(q) {
 function showRecentSearches() {
   const r = JSON.parse(localStorage.getItem('nxrecent') || '[]');
   const drop = document.getElementById('srch-drop');
-  if (!drop || !r.length) return;
+  if (!drop) return;
+  if (!r.length) {
+    // Show empty state so user knows the dropdown works
+    drop.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--sub);text-align:center"><i class="fas fa-clock-rotate-left" style="margin-right:6px;opacity:.5"></i>No recent searches</div>`;
+    drop.style.display = 'block';
+    return;
+  }
   drop.innerHTML = `
     <div style="padding:8px 14px 4px;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px">Recent</div>
-    ${r.map(q => `<div class="srch-recent-item" onclick="doRecentSearch('${q.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}')">
+    ${r.map(q => `<div class="srch-recent-item" onclick="doRecentSearch('${q.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}')" style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer">
       <i class="fas fa-clock-rotate-left" style="color:var(--sub);width:14px;font-size:11px"></i>
-      <span style="flex:1;font-size:13px">${escHtml(q)}</span>
-      <button onclick="event.stopPropagation();removeRecentSearch('${q.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}')" style="background:none;border:none;cursor:pointer;color:var(--sub);padding:2px 4px;font-size:11px"><i class="fas fa-xmark"></i></button>
+      <span style="flex:1;font-size:13px;color:var(--text)">${q}</span>
+      <button onclick="event.stopPropagation();removeRecentSearch('${q.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}')" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:14px;padding:2px 6px;border-radius:4px;line-height:1" title="Remove">&times;</button>
     </div>`).join('')}
     <div style="padding:6px 14px 8px;border-top:1px solid var(--border);margin-top:4px">
-      <button onclick="clearRecentSearches()" style="background:none;border:none;cursor:pointer;color:var(--sub);font-size:12px;width:100%;text-align:center">Clear all</button>
+      <button onclick="clearRecentSearches()" style="background:none;border:none;cursor:pointer;color:var(--primary);font-size:12px;font-weight:500;padding:2px 0">Clear all</button>
     </div>`;
   drop.style.display = 'block';
 }
+
 function hideSearchDrop() {
   const d = document.getElementById('srch-drop'); if (d) d.style.display = 'none';
 }
@@ -1612,7 +1633,7 @@ function renderComposer() {
     <button class="cbtn" id="cb-photo" onclick="tmode('photo')"><i class="fas fa-image" style="color:#3b82f6"></i><span class="cbtn-lbl"> Photo</span></button>
     <button class="cbtn" id="cb-poll" onclick="tmode('poll')"><i class="fas fa-chart-bar" style="color:#8b5cf6"></i><span class="cbtn-lbl"> Poll</span></button>
     <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i><span class="cbtn-lbl"> Schedule</span></button>
-    <button class="cbtn" onmouseenter="openEmojiPicker('ptxt',this)" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊<span class="cbtn-lbl"> Emoji</span></button>
+    <button class="cbtn" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊<span class="cbtn-lbl"> Emoji</span></button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0">
       <label class="anon-lbl" style="margin-left:0"><input type="checkbox" id="anonchk"> Anonymous</label>
       <button class="btn btn-p btn-sm" onclick="submitPost()"><i class="fas fa-paper-plane"></i><span class="cbtn-lbl"> Post</span></button>
@@ -1890,29 +1911,42 @@ async function _submitFlag(type, id, reason) {
 // ── EMOJI PICKER ──────────────────────────────────────────────────────────
 const _EMOJIS = ['😊','😄','😎','🤔','👍','👋','🙏','❤️','🔥','💡','🚀','✅','💪','🎉','🤝','📌','📊','💼','🌟','⭐','🎯','📈','🏆','💰','🔗','📝','😂','🥳','🤩','🏅','👏','💬','🎓','🤓','😅'];
 let _emojiPopEl = null;
+function _closeEmojiPicker() {
+  if (_emojiPopEl) { _emojiPopEl.remove(); _emojiPopEl = null; }
+}
 function openEmojiPicker(targetId, btn) {
-  if (_emojiPopEl) { _emojiPopEl.remove(); _emojiPopEl = null; return; }
+  if (_emojiPopEl) { _closeEmojiPicker(); return; }
   const pop = document.createElement('div');
   pop.className = 'emoji-pop'; pop.id = 'epop';
   pop.innerHTML = _EMOJIS.map(e => `<button onclick="insertEmoji('${targetId}','${e}')">${e}</button>`).join('');
   document.body.appendChild(pop);
-  // Position after appending so we know the actual size
+  // Force layout so we get real dimensions
   const rect = btn.getBoundingClientRect();
-  const ph = pop.offsetHeight || 220;
-  const pw = pop.offsetWidth || 220;
-  // Prefer opening below; fall back above if not enough space below
+  const ph = pop.offsetHeight;
+  const pw = pop.offsetWidth;
+  // Prefer below button; fall back above if not enough space
   const spaceBelow = window.innerHeight - rect.bottom - 8;
-  const spaceAbove = rect.top - 8;
   let top = spaceBelow >= ph ? rect.bottom + 4 : rect.top - ph - 4;
   top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+  // Align left edge of picker with button, clamp to viewport
   let left = rect.left;
-  left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+  left = Math.max(8, left);
   pop.style.top = top + 'px';
   pop.style.left = left + 'px';
   _emojiPopEl = pop;
-  setTimeout(() => document.addEventListener('click', function _ec(e) {
-    if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); _emojiPopEl = null; document.removeEventListener('click', _ec); }
-  }), 10);
+  // Close on outside click (delayed so this click doesn't immediately close it)
+  setTimeout(() => {
+    document.addEventListener('click', function _ec(e) {
+      if (!pop.contains(e.target) && e.target !== btn) {
+        _closeEmojiPicker();
+        document.removeEventListener('click', _ec);
+      }
+    });
+    // Close when user scrolls (picker stays fixed but content moves)
+    window.addEventListener('scroll', _closeEmojiPicker, { once: true, passive: true, capture: true });
+    document.addEventListener('scroll', _closeEmojiPicker, { once: true, passive: true, capture: true });
+  }, 10);
 }
 function insertEmoji(targetId, emoji) {
   const inp = document.getElementById(targetId); if (!inp) return;
@@ -2046,7 +2080,14 @@ async function saveSkill() {
   const name = document.getElementById('skn').value.trim(); if (!name) return;
   await api('/api/users/me/skills', { method: 'POST', body: JSON.stringify({ name }) }); closeModal(); renderProfile(); toast('Skill added!');
 }
-async function removeConn(id) { if (!confirm('Remove connection?')) return; await api('/api/connections/' + id, { method: 'DELETE' }); renderProfile(id); toast('Connection removed'); }
+async function removeConn(id) {
+  showConfirm('Remove this connection?', async () => {
+    await api('/api/connections/' + id, { method: 'DELETE' });
+    apiInvalidate('/api/connections');
+    renderProfile(id);
+    toast('Connection removed');
+  }, 'Remove');
+}
 
 // ── NETWORK ───────────────────────────────────────────────────────────────
 async function renderNetwork() {
@@ -2336,8 +2377,12 @@ async function updateSal(id) {
   closeModal(); toast('Updated! 🙏'); renderSalary();
 }
 async function delSal(id) {
-  if (!confirm('Delete this salary entry?')) return;
-  await api('/api/salary/'+id, { method:'DELETE' }); toast('Deleted'); renderSalary();
+  showConfirm('Delete this salary entry?', async () => {
+    await api('/api/salary/'+id, { method:'DELETE' });
+    apiInvalidate('/api/salary');
+    toast('Salary entry deleted');
+    renderSalary();
+  });
 }
 async function editRev(id) {
   const d = await api('/api/reviews'); const r = d.find(x=>x.id===id); if(!r) return;
@@ -2361,8 +2406,12 @@ async function updateRev(id) {
   closeModal(); toast('Updated! 🙏'); renderReviews();
 }
 async function delRev(id) {
-  if (!confirm('Delete this review?')) return;
-  await api('/api/reviews/'+id, { method:'DELETE' }); toast('Deleted'); renderReviews();
+  showConfirm('Delete this review?', async () => {
+    await api('/api/reviews/'+id, { method:'DELETE' });
+    apiInvalidate('/api/reviews');
+    toast('Review deleted');
+    renderReviews();
+  });
 }
 
 // ── SALARY BOARD ──────────────────────────────────────────────────────────
@@ -2783,10 +2832,11 @@ async function showEditSession(id) {
 }
 
 async function deleteSession(id) {
-  if (!confirm('Delete this session? Existing bookings are not affected.')) return;
-  await api(`/api/mentor-sessions/${id}`, { method: 'DELETE' });
-  apiInvalidate('/api/mentor-sessions'); apiInvalidate('/api/experts');
-  toast('Session deleted'); renderExperts();
+  showConfirm('Delete this session? Existing bookings are not affected.', async () => {
+    await api(`/api/mentor-sessions/${id}`, { method: 'DELETE' });
+    apiInvalidate('/api/mentor-sessions'); apiInvalidate('/api/experts');
+    toast('Session deleted'); renderExperts();
+  });
 }
 
 function _renderSessionForm(ms) {
@@ -2994,10 +3044,11 @@ async function updateJob(id) {
   apiInvalidate('/api/jobs'); closeModal(); toast('Job updated! ✏️'); renderJobs();
 }
 async function closeJob(id) {
-  if (!confirm('Close this job? It will no longer appear in listings.')) return;
-  const r = await api('/api/jobs/' + id, { method: 'DELETE' });
-  if (r.error) { toast('Error: ' + r.error); return; }
-  apiInvalidate('/api/jobs'); toast('Job closed.'); renderJobs();
+  showConfirm('Close this job? It will no longer appear in listings.', async () => {
+    const r = await api('/api/jobs/' + id, { method: 'DELETE' });
+    if (r.error) { toast('Error: ' + r.error); return; }
+    apiInvalidate('/api/jobs'); toast('Job closed.'); renderJobs();
+  }, 'Close Job');
 }
 function filJobs() { const q = document.getElementById('jq').value.toLowerCase(); const t = document.getElementById('jt').value; document.getElementById('jlist').innerHTML = rJobList((window._jd || []).filter(j => (!q || (j.title + j.company + (j.description || '')).toLowerCase().includes(q)) && (!t || j.job_type === t))); }
 function showApply(id, title) {
@@ -3069,10 +3120,4 @@ setTimeout(() => {
   // Remove splash screen
   setTimeout(() => {
     const l = document.getElementById('nxload');
-    if (l) { l.style.opacity = '0'; setTimeout(() => l.remove(), 350); }
-  }, 350);
-})();
-</script>
-</body>
-</html>
-         
+    if (l) { l.style.opacity = '0'; setTimeout(() => l.r
