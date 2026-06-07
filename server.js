@@ -47,6 +47,37 @@ async function sendEmail(to, subject, html) {
   } catch(e) { console.error('Email error:', e.message); return false; }
 }
 
+// ── Nexus Community system user (sender for welcome messages) ────────────
+// Always ensure this account exists; it's never exposed in search/suggestions
+const NEXUS_BOT_EMAIL = '__nexus_system__@nexus.internal';
+let NEXUS_BOT_ID = null;
+(function ensureSystemUser() {
+  try {
+    let bot = db.prepare('SELECT id FROM users WHERE email=?').get(NEXUS_BOT_EMAIL);
+    if (!bot) {
+      const info = db.prepare(
+        `INSERT INTO users (name, email, password, headline, avatar_url, is_system) VALUES (?,?,?,?,?,?) `
+      ).run('Nexus Community', NEXUS_BOT_EMAIL, 'NOT_A_REAL_PASSWORD', 'Official Nexus account', '', 1);
+      NEXUS_BOT_ID = info.lastInsertRowid;
+    } else {
+      NEXUS_BOT_ID = bot.id;
+    }
+    console.log('[system] Nexus Community bot id:', NEXUS_BOT_ID);
+  } catch(e) {
+    // is_system column may not exist yet — add it then retry
+    try { db.prepare('ALTER TABLE users ADD COLUMN is_system INTEGER DEFAULT 0').run(); } catch(_) {}
+    try {
+      let bot = db.prepare('SELECT id FROM users WHERE email=?').get(NEXUS_BOT_EMAIL);
+      if (!bot) {
+        const info = db.prepare(
+          `INSERT INTO users (name, email, password, headline, avatar_url) VALUES (?,?,?,?,?)`
+        ).run('Nexus Community', NEXUS_BOT_EMAIL, 'NOT_A_REAL_PASSWORD', 'Official Nexus account', '');
+        NEXUS_BOT_ID = info.lastInsertRowid;
+      } else { NEXUS_BOT_ID = bot.id; }
+    } catch(e2) { console.error('[system] Could not create system user:', e2.message); }
+  }
+})();
+
 // On Railway: uploads live on persistent volume; locally: public/uploads
 const VOLUME = process.env.RAILWAY_VOLUME_MOUNT_PATH || null;
 const uploadsDir = VOLUME
@@ -203,6 +234,13 @@ app.post('/api/auth/register', async (req, res) => {
     const user = db.prepare(`SELECT id, name, email, headline, location, avatar_url, banner_url, about, current_position, connections_count, is_dark_mode FROM users WHERE id = ?`).get(info.lastInsertRowid);
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user });
+    // Send in-app welcome message from Nexus Community (fire-and-forget)
+    if (NEXUS_BOT_ID) {
+      try {
+        const welcomeMsg = `Hi ${user.name.split(' ')[0]} 👋 Welcome to Nexus! Here are a few things to get started:\n\n• Complete your profile — add a headline, skills, and experience\n• Connect with people in your field\n• Share your salary anonymously on the Salary Board\n• Explore mentors who can guide your career\n\nIf you ever have questions, this is your space. We're glad you're here! 🚀`;
+        db.prepare('INSERT INTO messages (sender_id, receiver_id, content) VALUES (?,?,?)').run(NEXUS_BOT_ID, user.id, welcomeMsg);
+      } catch(e) { console.error('[welcome msg]', e.message); }
+    }
     // Send welcome email (fire-and-forget)
     sendEmail(email, 'Welcome to Nexus!', `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0d1117;color:#e8ecf8;border-radius:12px">
@@ -269,7 +307,7 @@ app.get('/api/search', auth, (req, res) => {
       (c.requester_id=? AND c.addressee_id=u.id) OR
       (c.addressee_id=? AND c.requester_id=u.id)
     )
-    WHERE u.id != ? AND (
+    WHERE u.id != ? AND (u.email IS NULL OR u.email != '__nexus_system__@nexus.internal') AND (
       u.name LIKE ? OR u.headline LIKE ? OR
       u.current_position LIKE ? OR u.location LIKE ?
     )
@@ -710,7 +748,7 @@ app.get('/api/connections/suggestions', auth, (req, res) => {
       (bridge.requester_id = myconn.mid AND bridge.addressee_id = u.id) OR
       (bridge.addressee_id = myconn.mid AND bridge.requester_id = u.id)
     )
-    WHERE u.id != ?
+    WHERE u.id != ? AND (u.email IS NULL OR u.email != '__nexus_system__@nexus.internal')
     AND u.id NOT IN (
       SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
       FROM connections WHERE (requester_id=? OR addressee_id=?) AND status IN ('accepted','pending')
