@@ -234,12 +234,17 @@ app.post('/api/auth/register', async (req, res) => {
     const user = db.prepare(`SELECT id, name, email, headline, location, avatar_url, banner_url, about, current_position, connections_count, is_dark_mode FROM users WHERE id = ?`).get(info.lastInsertRowid);
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user });
-    // Send in-app welcome message from Nexus Community (fire-and-forget)
+    // Send in-app welcome message + feed post from Nexus Community (fire-and-forget)
     if (NEXUS_BOT_ID) {
       try {
-        const welcomeMsg = `Hi ${user.name.split(' ')[0]} 👋 Welcome to Nexus! Here are a few things to get started:\n\n• Complete your profile — add a headline, skills, and experience\n• Connect with people in your field\n• Share your salary anonymously on the Salary Board\n• Explore mentors who can guide your career\n\nIf you ever have questions, this is your space. We're glad you're here! 🚀`;
+        const firstName = user.name.split(' ')[0];
+        // Chat message
+        const welcomeMsg = `Hi ${firstName} 👋 Welcome to Nexus! Here are a few things to get started:\n\n• Complete your profile — add a headline, skills, and experience\n• Connect with people in your field\n• Share your salary anonymously on the Salary Board\n• Explore mentors who can guide your career\n\nIf you ever have questions, this is your space. We're glad you're here! 🚀`;
         db.prepare('INSERT INTO messages (sender_id, receiver_id, content) VALUES (?,?,?)').run(NEXUS_BOT_ID, user.id, welcomeMsg);
-      } catch(e) { console.error('[welcome msg]', e.message); }
+        // Welcome feed post — only visible to this user (welcome_for_user_id)
+        const welcomePost = `👋 Welcome to Nexus, ${firstName}!\n\nYou've just joined a community built around real professional growth — not just networking for the sake of it.\n\nHere's what makes Nexus different:\n\n💼 Transparent salaries — see what people actually earn, by role and company\n⭐ Honest company reviews — from real employees, not marketing pages\n🎓 Peer mentorship — book 1:1 sessions with people who've been in your shoes\n🤝 Genuine connections — grow your network with people who matter\n\nStart by completing your profile, making your first post, or exploring people you may know.\n\nWe're glad you're here. 🚀`;
+        db.prepare('INSERT INTO posts (author_id, content, is_published, welcome_for_user_id) VALUES (?,?,1,?)').run(NEXUS_BOT_ID, welcomePost, user.id);
+      } catch(e) { console.error('[welcome]', e.message); }
     }
     // Send welcome email (fire-and-forget)
     sendEmail(email, 'Welcome to Nexus!', `
@@ -433,6 +438,7 @@ app.get('/api/posts', auth, (req, res) => {
   const feedFilter = (isDemo || discover)
     ? `WHERE p.is_published = 1`
     : `WHERE p.is_published = 1 AND (
+        p.welcome_for_user_id = ? OR
         p.author_id = ? OR
         p.author_id IN (
           SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END
@@ -441,7 +447,7 @@ app.get('/api/posts', auth, (req, res) => {
       )`;
   const feedParams = (isDemo || discover)
     ? [req.user.id, limit, offset]
-    : [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset];
+    : [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset];
 
   const sort = req.query.sort === 'new' ? 'new' : 'top';
   // Use JOINed counts for ORDER BY — avoids correlated subqueries per row

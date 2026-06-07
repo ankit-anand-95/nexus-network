@@ -318,6 +318,7 @@ const migrations = [
   `ALTER TABLE users ADD COLUMN is_disabled INTEGER DEFAULT 0`,
   `ALTER TABLE interview_sessions ADD COLUMN slot_key TEXT DEFAULT ''`,
   `ALTER TABLE interview_sessions ADD COLUMN mentor_session_id INTEGER DEFAULT NULL`,
+  `ALTER TABLE posts ADD COLUMN welcome_for_user_id INTEGER DEFAULT NULL`,
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 
