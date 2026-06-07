@@ -2114,7 +2114,7 @@ function addExp() {
 async function saveExp() {
   const b = { company: document.getElementById('xco').value, role: document.getElementById('xro').value, start_date: document.getElementById('xsd').value, end_date: document.getElementById('xed').value, is_current: document.getElementById('xcur').checked ? 1 : 0, description: document.getElementById('xde').value };
   if (!b.company || !b.role) { toast('Company and role required'); return; }
-  await api('/api/users/me/experience', { method: 'POST', body: JSON.stringify(b) }); closeModal(); renderProfile(); toast('Experience added!');
+  await api('/api/users/me/experience', { method: 'POST', body: JSON.stringify(b) }); apiInvalidate('/api/users/me'); apiInvalidate('/api/users/' + me.id); closeModal(); renderProfile(); toast('Experience added! ✅');
 }
 function addEdu() {
   showModal(`<h2 style="margin-bottom:16px">Add Education</h2>
@@ -2126,7 +2126,7 @@ function addEdu() {
 async function saveEdu() {
   const b = { school: document.getElementById('esc').value, degree: document.getElementById('edg').value, start_year: document.getElementById('esy').value, end_year: document.getElementById('eey').value };
   if (!b.school) { toast('School required'); return; }
-  await api('/api/users/me/education', { method: 'POST', body: JSON.stringify(b) }); closeModal(); renderProfile(); toast('Education added!');
+  await api('/api/users/me/education', { method: 'POST', body: JSON.stringify(b) }); apiInvalidate('/api/users/me'); apiInvalidate('/api/users/' + me.id); closeModal(); renderProfile(); toast('Education added! ✅');
 }
 function addSkill() {
   showModal(`<h2 style="margin-bottom:16px">Add Skill</h2>
@@ -2491,7 +2491,7 @@ function showSalForm() {
 async function saveSal() {
   const b = { company: document.getElementById('slco').value, role: document.getElementById('slro').value, salary_lpa: parseFloat(document.getElementById('slsa').value), experience_years: parseInt(document.getElementById('slexp').value) || 0, city: document.getElementById('slci').value, tech_stack: document.getElementById('slst').value, is_anonymous: document.getElementById('slan').checked };
   if (!b.company || !b.role || !b.salary_lpa) { toast('Required fields missing'); return; }
-  await api('/api/salary', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Salary shared! 🙏'); renderSalary();
+  await api('/api/salary', { method: 'POST', body: JSON.stringify(b) }); apiInvalidate('/api/salary'); closeModal(); toast('Salary shared! 🙏'); renderSalary();
 }
 
 // ── REVIEWS ───────────────────────────────────────────────────────────────
@@ -2517,7 +2517,7 @@ async function saveRev() {
   const r = parseInt(document.getElementById('rvrat').value); if (!r) { toast('Select a rating'); return; }
   const b = { company: document.getElementById('rvco').value, overall_rating: r, title: document.getElementById('rvti').value, pros: document.getElementById('rvpro').value, cons: document.getElementById('rvcon').value, work_life_balance: document.getElementById('rvwlb').value, culture: document.getElementById('rvcul').value, would_recommend: document.getElementById('rvrec').checked, is_anonymous: document.getElementById('rvan').checked };
   if (!b.company) { toast('Company required'); return; }
-  await api('/api/reviews', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Review submitted! 🙏'); renderReviews();
+  await api('/api/reviews', { method: 'POST', body: JSON.stringify(b) }); apiInvalidate('/api/reviews'); closeModal(); toast('Review submitted! 🙏'); renderReviews();
 }
 
 // ── MENTORS / EXPERTS ─────────────────────────────────────────────────────
@@ -3113,7 +3113,7 @@ function filJobs() { const q = document.getElementById('jq').value.toLowerCase()
 function showApply(id, title) {
   showModal(`<h2 style="margin-bottom:16px">Apply: ${title}</h2><div class="fg"><label>Cover Letter (optional)</label><textarea id="cltxt" rows="5" placeholder="Why are you a great fit?"></textarea></div><button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="applyJob(${id})"><i class="fas fa-paper-plane"></i> Submit Application</button>`);
 }
-async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } closeModal(); toast('Applied! 🎉'); renderJobs(); }
+async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } apiInvalidate('/api/jobs'); closeModal(); toast('Applied! 🎉'); renderJobs(); }
 function showPostJob() {
   showModal(`<h2 style="margin-bottom:16px">Post a Job</h2>
     <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Enargin-bottom:16px">Post a Job</h2>
@@ -3127,7 +3127,7 @@ function showPostJob() {
 async function saveJob() {
   const b = { title: document.getElementById('pjti').value, company: document.getElementById('pjco').value, location: document.getElementById('pjlo').value, job_type: document.getElementById('pjty').value, salary_range: document.getElementById('pjsa').value, description: document.getElementById('pjde').value, requirements: document.getElementById('pjre').value };
   if (!b.title || !b.company) { toast('Title and company required'); return; }
-  await api('/api/jobs', { method: 'POST', body: JSON.stringify(b) }); closeModal(); toast('Job posted!'); renderJobs();
+  await api('/api/jobs', { method: 'POST', body: JSON.stringify(b) }); apiInvalidate('/api/jobs'); closeModal(); toast('Job posted! 🎉'); renderJobs();
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
