@@ -980,21 +980,18 @@ function initSocket() {
   // Real-time analytics — profile viewed or post engaged
   socket.on('analytics_update', () => {
     apiInvalidate('/api/analytics/me');
-    // Update left sidebar numbers
-    api('/api/analytics/me').then(a => {
-      if (!a) return;
-      const v = document.getElementById('sb-views'); if (v) v.textContent = a.profile_views ?? 0;
-      const i = document.getElementById('sb-impr'); if (i) i.textContent = a.post_impressions ?? 0;
-    });
-    // Update right sidebar if on home
-    if (curPage === 'home') {
-      const rsA = document.getElementById('rs-analytics');
-      if (rsA) api('/api/analytics/me').then(a => {
-        if (!a) return;
-        const v = rsA.querySelector('.stat-val[data-key="views"]'); if (v) v.textContent = a.profile_views ?? 0;
-        const i = rsA.querySelector('.stat-val[data-key="impr"]'); if (i) i.textContent = a.post_impressions ?? 0;
-      });
-    }
+    // Bypass client cache with direct fetch to always get live data
+    fetch('/api/analytics/me', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => r.json()).then(a => {
+        if (!a || a.error) return;
+        const v = document.getElementById('sb-views'); if (v) v.textContent = a.profile_views ?? 0;
+        const i = document.getElementById('sb-impr'); if (i) i.textContent = a.post_impressions ?? 0;
+        const rsA = document.getElementById('rs-analytics');
+        if (rsA) {
+          const rv = rsA.querySelector('.stat-val[data-key="views"]'); if (rv) rv.textContent = a.profile_views ?? 0;
+          const ri = rsA.querySelector('.stat-val[data-key="impr"]'); if (ri) ri.textContent = a.post_impressions ?? 0;
+        }
+      }).catch(() => {});
   });
 
   socket.on('post_reacted', ({ postId, reactions, my_reaction_by }) => {
@@ -1491,7 +1488,7 @@ function renderComposer() {
     <button class="cbtn" id="cb-photo" onclick="tmode('photo')"><i class="fas fa-image" style="color:#3b82f6"></i><span class="cbtn-lbl"> Photo</span></button>
     <button class="cbtn" id="cb-poll" onclick="tmode('poll')"><i class="fas fa-chart-bar" style="color:#8b5cf6"></i><span class="cbtn-lbl"> Poll</span></button>
     <button class="cbtn" id="cb-sched" onclick="tmode('sched')"><i class="fas fa-clock" style="color:#f59e0b"></i><span class="cbtn-lbl"> Schedule</span></button>
-    <button class="cbtn" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊<span class="cbtn-lbl"> Emoji</span></button>
+    <button class="cbtn" onmouseenter="openEmojiPicker('ptxt',this)" onclick="openEmojiPicker('ptxt',this)" title="Emoji">😊<span class="cbtn-lbl"> Emoji</span></button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0">
       <label class="anon-lbl" style="margin-left:0"><input type="checkbox" id="anonchk"> Anonymous</label>
       <button class="btn btn-p btn-sm" onclick="submitPost()"><i class="fas fa-paper-plane"></i><span class="cbtn-lbl"> Post</span></button>
@@ -1504,7 +1501,7 @@ function tmode(m) {
   cmode = m; document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('on')); document.getElementById('cb-' + m)?.classList.add('on');
   if (m === 'photo') el.innerHTML = `<div style="padding:0 16px 10px"><label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:2px dashed var(--border);border-radius:var(--r-sm);cursor:pointer;font-size:13px;color:var(--sub)"><i class="fas fa-upload"></i> Choose image <input type="file" id="phi" accept="image/*" style="display:none" onchange="this.parentElement.querySelectorAll('span').forEach(s=>s.remove());this.parentElement.insertAdjacentHTML('beforeend','<span style=color:var(--primary)>'+this.files[0].name+'</span>')"></label></div>`;
   else if (m === 'poll') el.innerHTML = `<div style="padding:0 16px 10px"><div id="powr"><input class="popt" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px;margin-bottom:8px" placeholder="Option 1"><input class="popt" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px;margin-bottom:8px" placeholder="Option 2"></div><button onclick="addPO()" style="font-size:12px;color:var(--primary);background:none;border:none;cursor:pointer;font-weight:600"><i class="fas fa-plus"></i> Add option</button></div>`;
-  else if (m === 'sched') { const d = new Date(); d.setHours(d.getHours() + 1); el.innerHTML = `<div style="padding:0 16px 10px;display:flex;align-items:center;gap:10px"><label style="font-size:13px;font-weight:700;color:var(--sub)">Publish at:</label><input type="datetime-local" id="schdt" value="${d.toISOString().slice(0, 16)}" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--inp);color:var(--text);font-size:13px"></div>`; }
+  else if (m === 'sched') { const d = new Date(); d.setHours(d.getHours() + 1); el.innerHTML = `<div style="padding:8px 16px 12px"><div style="display:flex;align-items:center;gap:12px;background:var(--inp);border:1.5px solid var(--primary);border-radius:var(--r-sm);padding:10px 14px"><i class="fas fa-clock" style="color:#f59e0b;font-size:15px;flex-shrink:0"></i><div style="flex:1;min-width:0"><p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.4px;margin:0 0 3px">Publish at</p><input type="datetime-local" id="schdt" value="${d.toISOString().slice(0, 16)}" style="background:none;border:none;color:var(--text);font-size:14px;font-weight:600;padding:0;width:100%;outline:none"></div></div></div>`; }
 }
 function addPO() { const w = document.getElementById('powr'); if (!w || w.children.length >= 4) return; const i = document.createElement('input'); i.className = 'popt'; i.style.cssText = 'width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--inp);color:var(--text);font-size:13px;margin-bottom:8px'; i.placeholder = 'Option ' + (w.children.length + 1); w.appendChild(i); }
 async function submitPost() {
@@ -1668,8 +1665,7 @@ function sharePost(id) { const url = window.location.origin + '?post=' + id; nav
 // ── REACTIONS ─────────────────────────────────────────────────────────────
 let _rxTimers = {}, _rxPop = null;
 function showReactPop(id, btn) {
-  clearTimeout(_rxTimers[id]);
-  // Remove any existing popup
+  clearTimeout(_rxTimers[id]); clearTimeout(_rxTimers['auto_' + id]);
   if (_rxPop && _rxPop.dataset.pid != id) { _rxPop.remove(); _rxPop = null; }
   if (_rxPop) return;
   const pop = document.createElement('div');
@@ -1680,19 +1676,24 @@ function showReactPop(id, btn) {
   const rect = btn.getBoundingClientRect();
   pop.style.top = (rect.top - 10 - 80) + 'px';
   pop.style.left = rect.left + 'px';
-  pop.addEventListener('mouseenter', () => clearTimeout(_rxTimers[id]));
+  pop.addEventListener('mouseenter', () => { clearTimeout(_rxTimers['auto_' + id]); clearTimeout(_rxTimers[id]); });
   pop.addEventListener('mouseleave', () => startHideReactPop(id));
   document.body.appendChild(pop);
   _rxPop = pop;
+  // Auto-close after 2.5s if user doesn't interact
+  _rxTimers['auto_' + id] = setTimeout(() => {
+    if (_rxPop && _rxPop.dataset.pid == id) { _rxPop.remove(); _rxPop = null; }
+  }, 2500);
 }
 function toggleReactPop(id, btn) {
   if (_rxPop && _rxPop.dataset.pid == id) { _rxPop.remove(); _rxPop = null; }
   else { showReactPop(id, btn); }
 }
 function startHideReactPop(id) {
+  clearTimeout(_rxTimers['auto_' + id]);
   _rxTimers[id] = setTimeout(() => {
     if (_rxPop && _rxPop.dataset.pid == id) { _rxPop.remove(); _rxPop = null; }
-  }, 350);
+  }, 300);
 }
 async function reactPost(id, reaction) {
   if (_rxPop) { _rxPop.remove(); _rxPop = null; }
@@ -1769,11 +1770,37 @@ function insertEmoji(targetId, emoji) {
   if (_emojiPopEl) { _emojiPopEl.remove(); _emojiPopEl = null; }
 }
 
+// ── FOLLOW ────────────────────────────────────────────────────────────────
+async function toggleFollow(id) {
+  const btn = document.getElementById('fol-' + id); if (!btn) return;
+  btn.disabled = true;
+  try {
+    // Bypass api() cache — use raw fetch so we always get a live response
+    const resp = await fetch('/api/users/' + id + '/follow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }
+    });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok || r.error) { toast(r.error || 'Follow failed (' + resp.status + ')'); return; }
+    // Invalidate cached follow state so next profile render is fresh
+    apiInvalidate('/api/users/' + id + '/follow');
+    btn.className = 'btn btn-o follow-btn' + (r.following ? ' following' : '');
+    btn.innerHTML = `<i class="fas fa-${r.following ? 'user-check' : 'user-plus'}"></i> ${r.following ? 'Following' : 'Follow'}`;
+    toast(r.following ? '✅ Following!' : 'Unfollowed');
+  } catch(e) {
+    toast('Network error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ── PROFILE ───────────────────────────────────────────────────────────────
 async function renderProfile(uid) {
   const isMe = !uid || uid == me?.id;
   const d = await api(isMe ? '/api/users/me' : '/api/users/' + uid);
-  if (!isMe && uid) api('/api/users/' + uid + '/view', { method: 'POST' }).catch(() => {});
+  if (!isMe && uid) fetch('/api/users/' + uid + '/view', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }
+  }).catch(() => {});
   if (d.error) { document.getElementById('pr').innerHTML = '<div class="card empty"><i class="fas fa-user-slash"></i><p>User not found</p></div>'; return; }
   const cs = d.connectionStatus;
   let followData = { following: false };
