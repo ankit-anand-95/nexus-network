@@ -203,6 +203,26 @@ app.post('/api/auth/register', async (req, res) => {
     const user = db.prepare(`SELECT id, name, email, headline, location, avatar_url, banner_url, about, current_position, connections_count, is_dark_mode FROM users WHERE id = ?`).get(info.lastInsertRowid);
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user });
+    // Send welcome email (fire-and-forget)
+    sendEmail(email, 'Welcome to Nexus!', `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0d1117;color:#e8ecf8;border-radius:12px">
+        <div style="text-align:center;margin-bottom:28px">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:linear-gradient(135deg,#6366f1,#818cf8);border-radius:14px;font-size:26px;font-weight:900;color:#fff;margin-bottom:12px">N</div>
+          <h1 style="margin:0;font-size:22px;color:#e8ecf8">Welcome to Nexus, ${user.name.split(' ')[0]}!</h1>
+        </div>
+        <p style="color:#9aa5be;font-size:14px;line-height:1.6">You're now part of a professional community built on transparency and real connections. Here's what you can do:</p>
+        <ul style="color:#9aa5be;font-size:14px;line-height:1.8;padding-left:20px">
+          <li>Build your profile and showcase your experience</li>
+          <li>Connect with peers and grow your network</li>
+          <li>Share salary insights and company reviews</li>
+          <li>Find mentors or become one</li>
+        </ul>
+        <div style="text-align:center;margin:28px 0">
+          <a href="${APP_URL}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px">Go to Nexus →</a>
+        </div>
+        <p style="color:#4a5568;font-size:12px;text-align:center;margin-top:24px">You're receiving this because you created a Nexus account.</p>
+      </div>
+    `).catch(() => {});
   } catch (e) {
     res.status(400).json({ error: 'Email already exists' });
   }

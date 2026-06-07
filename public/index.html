@@ -1312,8 +1312,8 @@ function renderAF(m, resetToken) {
     <div id="aerr"></div>
     ${!il ? '<div class="fg"><label>Full Name</label><input id="an" type="text" name="name" placeholder="Your full name" autocomplete="name"></div>' : ''}
     <div class="fg"><label>Email</label><input id="ae" type="email" name="email" placeholder="you@example.com" autocomplete="${il ? 'email' : 'off'}"></div>
-    <div class="fg"><label>Password</label><input id="ap" type="password" name="password" placeholder="${il ? 'Password' : 'Min 6 characters'}" autocomplete="${il ? 'current-password' : 'new-password'}" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)"></div>
-    ${!il ? '<div class="fg"><label>Confirm Password</label><input id="ap2" type="password" name="confirm-password" placeholder="Repeat password" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')doAuth(\'register\')"></div>' : ''}
+    <div class="fg"><label>Password</label><div style="position:relative"><input id="ap" type="password" name="password" placeholder="${il ? 'Password' : 'Min 8 chars, incl. number & symbol'}" autocomplete="${il ? 'current-password' : 'new-password'}" onkeydown="if(event.key===&apos;Enter&apos;)doAuth(&apos;${m}&apos;)" style="width:100%;padding-right:40px;box-sizing:border-box"><button type="button" onclick="togglePw(&apos;ap&apos;,this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--sub)"><i class="fas fa-eye"></i></button></div></div>
+    ${!il ? '<div class="fg"><label>Confirm Password</label><div style="position:relative"><input id="ap2" type="password" name="confirm-password" placeholder="Repeat password" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')doAuth(\'register\')" style="width:100%;padding-right:40px;box-sizing:border-box"><button type="button" onclick="togglePw(\'ap2\',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--sub)"><i class=\"fas fa-eye\"></i></button></div></div>' : ''}
     ${!il ? '<div class="fg"><label>Headline <span style="font-weight:400">(optional)</span></label><input id="ah" type="text" autocomplete="off" placeholder="e.g. Software Engineer at Google"></div>' : ''}
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" onclick="doAuth(&apos;${m}&apos;)">${il ? 'Sign in' : 'Create Account'}</button>
     <div class="atog">${il ? 'New to Nexus? <a href="#" onclick="renderAF(&apos;register&apos;)">Join now</a>' : 'Already on Nexus? <a href="#" onclick="renderAF(&apos;login&apos;)">Sign in</a>'}</div>
@@ -1327,7 +1327,9 @@ async function doAuth(m) {
   if (m === 'register') {
     const n = document.getElementById('an')?.value.trim();
     if (!n) { el.innerHTML = '<div class="err">Name required</div>'; return; }
-    if (p.length < 6) { el.innerHTML = '<div class="err">Password must be at least 6 characters</div>'; return; }
+    if (p.length < 8) { el.innerHTML = '<div class="err">Password must be at least 8 characters</div>'; return; }
+    if (!/[0-9]/.test(p)) { el.innerHTML = '<div class="err">Password must include at least one number</div>'; return; }
+    if (!/[^a-zA-Z0-9]/.test(p)) { el.innerHTML = '<div class="err">Password must include at least one special character (!@#$...)</div>'; return; }
     const p2 = document.getElementById('ap2')?.value;
     if (p !== p2) { el.innerHTML = '<div class="err">Passwords do not match</div>'; return; }
     body = { ...body, name: n, headline: document.getElementById('ah')?.value.trim() };
@@ -1479,6 +1481,14 @@ function _skelSidebar() {
   return `<div class="skel-card" style="padding:0;overflow:hidden"><div style="height:60px" class="skel" style="border-radius:0"></div><div style="padding:16px"><div class="skel skel-line w60"></div><div class="skel skel-line w80"></div></div></div>`;
 }
 
+function togglePw(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  const icon = btn.querySelector('i');
+  if (icon) { icon.className = show ? 'fas fa-eye-slash' : 'fas fa-eye'; }
+}
 async function renderHome() {
   _feedPage = 1; _feedLoading = false; _feedDone = false;
   // Show skeleton immediately — no blank flash
@@ -2874,7 +2884,7 @@ async function showAnalyticsModal() {
     </div>
     <p style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px">Top Posts</p>
     <div style="max-height:220px;overflow-y:auto">${rows}</div>
-    <p style="font-size:11px;color:var(--sub);text-align:center;margin-top:14px">Updates in real-time as people view your profile and engage with posts.</p>`;
+`;
 }
 
 // ── showAddSession: full form to create a new mentor session ─────────────
