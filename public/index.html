@@ -1268,6 +1268,7 @@ async function refreshThreads() {
 }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 async function pollBadges() {
+  apiInvalidate('/api/notifications/badges');
   const r = await api('/api/notifications/badges').catch(() => ({}));
   if (r.unread_notifications > 0) updBadge('nbadge', r.unread_notifications); else updBadge('nbadge', 0);
   if (r.unread_messages > 0) updBadge('mbadge', r.unread_messages); else updBadge('mbadge', 0);
@@ -2212,6 +2213,7 @@ async function actConn(id, action, btn) {
     // Refresh network page after short delay to show new connection
     setTimeout(() => renderNetwork(), 800);
   }
+  apiInvalidate('/api/notifications/badges');
   pollBadges(); // update Network badge count
 }
 
