@@ -3125,4 +3125,10 @@ setTimeout(() => {
   }
   // Remove splash screen
   setTimeout(() => {
-    const l 
+    const l = document.getElementById('nxload');
+    if (l) { l.style.opacity = '0'; setTimeout(() => l.remove(), 350); }
+  }, 350);
+})();
+</script>
+</body>
+</html>
