@@ -222,9 +222,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(0.
 body.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(0.8) brightness(1.5)}
 /* Editable bubble */
 .bub.mine:hover .edit-msg-btn{opacity:1}
-.edit-msg-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:11px;padding:2px 4px;opacity:0;transition:.15s}
-.edit-msg-btn{opacity:0;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:11px;padding:2px 4px;transition:opacity .15s;margin-left:4px}
-.edit-msg-btn:hover{color:#fff}
+.edit-msg-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:11px;padding:2px 4px;opacity:0;transition:opacity .15s;margin-left:4px}
+.edit-msg-btn:hover{color:#fff;opacity:1}
+@media(pointer:coarse){.edit-msg-btn{opacity:.7}}
 
 /* AVATAR */
 .av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
@@ -587,6 +587,33 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('nxtoken') || '';
+
+// ── SOUND ENGINE (Web Audio API — no external files needed) ──────────────
+const _ac = typeof AudioContext !== 'undefined' ? new AudioContext() : (typeof webkitAudioContext !== 'undefined' ? new webkitAudioContext() : null);
+function _playTone(freq, type, duration, vol) {
+  if (!_ac) return;
+  try {
+    if (_ac.state === 'suspended') _ac.resume();
+    const o = _ac.createOscillator(), g = _ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, _ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, _ac.currentTime + duration);
+    o.connect(g); g.connect(_ac.destination);
+    o.start(); o.stop(_ac.currentTime + duration);
+  } catch(e) {}
+}
+// Message received sound — two quick ascending tones (like WhatsApp)
+function playMsgSound() {
+  _playTone(700, 'sine', 0.12, 0.3);
+  setTimeout(() => _playTone(900, 'sine', 0.18, 0.25), 100);
+}
+// Notification sound — single soft ding
+function playNotifSound() {
+  _playTone(880, 'sine', 0.35, 0.2);
+  setTimeout(() => _playTone(1100, 'sine', 0.25, 0.15), 120);
+}
+// Resume AudioContext on first user interaction (browser requirement)
+document.addEventListener('click', () => { if (_ac && _ac.state === 'suspended') _ac.resume(); }, { once: true });
 let me = null, socket = null, postsData = [], curPage = 'home';
 
 // ── POST VIEW TRACKING via IntersectionObserver ──────────────────────────
@@ -818,6 +845,7 @@ function initSocket() {
         div.className = 'bub theirs'; div.setAttribute('data-mid', m.id);
         div.innerHTML = `${escHtml(m.content)}<div class="bub-foot"><time>${timeAgo(m.created_at||new Date().toISOString())}</time></div>`;
         mb.appendChild(div); mb.scrollTop = mb.scrollHeight;
+        playMsgSound();
         socket.emit('mark_read', { from: m.sender_id });
         setTimeout(refreshThreads, 300);
       }
@@ -828,6 +856,7 @@ function initSocket() {
         // Increment badge by fetching live count (avoids always-1 bug)
         fetch('/api/notifications/badges', { headers: { Authorization: 'Bearer ' + token } })
           .then(r => r.json()).then(b => { if (b && !b.error) updBadge('mbadge', b.unread_messages || 0); }).catch(() => {});
+        playMsgSound();
         if (m.sender_name) toast(`💬 ${m.sender_name}: ${(m.content||'').substring(0,60)}`);
       } else {
         // On messaging page but different chat — update thread list and badge
@@ -873,6 +902,7 @@ function initSocket() {
   });
 
   socket.on('notification', data => {
+    playNotifSound();
     pollBadges();
     if (data?.content) {
       const icons = { connection_request:'👤', connection_accepted:'🎉', like:'❤️', comment:'💬', session_booked:'📅', session_confirmed:'✅', session_declined:'❌', session_cancelled:'🚫', session_rescheduled:'🔄' };
