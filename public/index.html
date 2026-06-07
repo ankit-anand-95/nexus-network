@@ -727,16 +727,22 @@ function showModal(html) {
 }
 function closeModal() { document.getElementById('mbg')?.remove(); }
 function showConfirm(msg, onYes, yesLabel='Delete', yesCls='btn-danger') {
+  // Store callback by reference — never serialize functions into HTML attributes
+  window._confirmCb = onYes;
   const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'mbg';
   bg.innerHTML = `<div class="modal" style="max-width:360px;text-align:center">
     <p style="font-size:15px;font-weight:600;margin:0 0 8px;color:var(--text)">${msg}</p>
     <p style="font-size:13px;color:var(--sub);margin:0 0 24px">This action cannot be undone.</p>
     <div style="display:flex;gap:10px;justify-content:center">
       <button class="btn btn-o" onclick="closeModal()" style="min-width:90px">Cancel</button>
-      <button class="btn ${yesCls}" onclick="closeModal();(${onYes.toString()})()" style="min-width:90px">${yesLabel}</button>
+      <button class="btn ${yesCls}" id="_confirm_yes" style="min-width:90px">${yesLabel}</button>
     </div></div>`;
   bg.addEventListener('click', e => { if (e.target === bg) closeModal(); });
   document.body.appendChild(bg);
+  document.getElementById('_confirm_yes').addEventListener('click', () => {
+    closeModal();
+    if (window._confirmCb) { const cb = window._confirmCb; window._confirmCb = null; cb(); }
+  });
 }
 function updBadge(id, n) {
   const label = n > 99 ? '99+' : n;
@@ -3119,5 +3125,4 @@ setTimeout(() => {
   }
   // Remove splash screen
   setTimeout(() => {
-    const l = document.getElementById('nxload');
-    if (l) { l.style.opacity = '0'; setTimeout(() => l.r
+    const l 
