@@ -184,7 +184,7 @@ body.dark #awrap{background:linear-gradient(135deg,#0f0e1a,#1a1830)}
 .mthread .mi{flex:1;min-width:0}
 .mthread .mi h5{font-size:13px;font-weight:700;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mthread .mi p{font-size:12px;color:var(--sub);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.udot{width:10px;height:10px;border-radius:50%;background:var(--primary);flex-shrink:0}
+.udot{min-width:18px;height:18px;border-radius:9px;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0 4px}
 #ccol{display:flex;flex-direction:column;height:100%;min-height:0;align-self:stretch}
 #ctop{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
 #ctop h3{font-size:15px;font-weight:700;margin:0}
@@ -650,12 +650,13 @@ function showModal(html) {
 }
 function closeModal() { document.getElementById('mbg')?.remove(); }
 function updBadge(id, n) {
+  const label = n > 99 ? '99+' : n;
   // Top nav badge
   const el = document.getElementById(id);
-  if (el) { el.style.display = n > 0 ? 'block' : 'none'; el.textContent = n; }
+  if (el) { el.style.display = n > 0 ? 'block' : 'none'; el.textContent = label; }
   // Bottom nav badge mirror
   const bel = document.getElementById('bn-' + id);
-  if (bel) { bel.style.display = n > 0 ? 'block' : 'none'; bel.textContent = n; }
+  if (bel) { bel.style.display = n > 0 ? 'block' : 'none'; bel.textContent = label; }
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────
@@ -782,7 +783,7 @@ function initSocket() {
       if (!mb.querySelector('[data-mid="' + m.id + '"]')) {
         const div = document.createElement('div');
         div.className = 'bub theirs'; div.setAttribute('data-mid', m.id);
-        div.innerHTML = `${escHtml(m.content)}<div class="bub-foot"><time>${timeAgo(m.created_at)}</time></div>`;
+        div.innerHTML = `${escHtml(m.content)}<div class="bub-foot"><time>${timeAgo(m.created_at||new Date().toISOString())}</time></div>`;
         mb.appendChild(div); mb.scrollTop = mb.scrollHeight;
         socket.emit('mark_read', { from: m.sender_id });
         refreshThreads();
@@ -1072,7 +1073,7 @@ async function refreshThreads() {
   apiInvalidate('/api/messages/threads'); // always fetch fresh on real-time update
   const th = await api('/api/messages/threads');
   if (!Array.isArray(th) || !th.length) return;
-  ml.innerHTML = th.map(t => `<div class="mthread${t.id==achat?' active':''}" id="mt-${t.id}" onclick="openChat(${t.id},'${String(t.name).replace(/'/g,"&apos;")}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||''}</p></div>${t.unread_count>0?'<div class="udot"></div>':''}</div>`).join('');
+  ml.innerHTML = th.map(t => `<div class="mthread${t.id==achat?' active':''}" id="mt-${t.id}" onclick="openChat(${t.id},'${String(t.name).replace(/'/g,"&apos;")}')">${av(t,'av40')}<div class="mi"><h5>${t.name}</h5><p>${t.last_message||''}</p></div>${t.unread_count>0?`<div class="udot">${t.unread_count>99?'99+':t.unread_count}</div>`:''}</div>`).join('');
 }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 async function pollBadges() {
@@ -1994,7 +1995,10 @@ async function openChat(uid, name) {
   document.querySelectorAll('.mthread').forEach(e => e.classList.remove('active'));
   document.getElementById('mt-' + uid)?.classList.add('active');
   if (socket) { socket.emit('join_chat', uid); socket.emit('mark_read', { from: uid }); }
-  updBadge('mbadge', 0); // clear badge when opening any conversation
+  // Re-fetch badge count from server (marks this thread as read on server via mark_read)
+  setTimeout(() => api('/api/notifications/badges', {}, true).then(r => {
+    if (r && !r.error) updBadge('mbadge', r.unread_messages || 0);
+  }), 600);
   // Mobile: show chat full-screen
   const mlay = document.getElementById('mlay');
   if (mlay) mlay.classList.add('chat-open');
