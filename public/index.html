@@ -627,38 +627,40 @@ function playNotifSound() {
 );
 let me = null, socket = null, postsData = [], curPage = 'home';
 
-// ── POST VIEW TRACKING via IntersectionObserver ──────────────────────────
-const _seenPosts = new Set();  // posts already sent to server this session
-const _pendingViews = new Map(); // postId -> timer
-const _postObserver = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    const pid = parseInt(e.target.dataset.pid || e.target.id?.replace('pc-',''));
-    if (!pid) return;
-    if (e.isIntersecting) {
-      if (!_seenPosts.has(pid) && !_pendingViews.has(pid)) {
-        // Must be visible for 0.8s before counting as a view
-        _pendingViews.set(pid, setTimeout(() => {
-          _pendingViews.delete(pid);
-          if (_seenPosts.has(pid)) return;
-          _seenPosts.add(pid);
-          console.log('[impressions] observer recording pid:', pid);
-          fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: [pid] }) })
-            .then(r=>r.json()).then(d=>console.log('[impressions] observer result:', d)).catch(e=>console.error('[impressions] err:', e));
-        }, 800));
-      }
-    } else {
-      // Left viewport before 1.5s — cancel
-      const t = _pendingViews.get(pid);
-      if (t) { clearTimeout(t); _pendingViews.delete(pid); }
-    }
-  });
-}, { threshold: 0.5 }) : null;
+// ── POST VIEW TRACKING — simple scroll-based batch ───────────────────────
+const _seenPosts = new Set(); // post IDs sent this session
+let _viewTimer = null;
+
+function _sendVisiblePostViews() {
+  const pids = [...document.querySelectorAll('.post-card[data-pid]')]
+    .filter(el => {
+      if (_seenPosts.has(parseInt(el.dataset.pid))) return false;
+      const r = el.getBoundingClientRect();
+      return r.top < window.innerHeight - 50 && r.bottom > 50;
+    })
+    .map(el => parseInt(el.dataset.pid))
+    .filter(Boolean);
+  if (!pids.length) return;
+  pids.forEach(p => _seenPosts.add(p));
+  fetch('/api/posts/viewed', {
+    method:'POST',
+    headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+    body: JSON.stringify({ post_ids: pids })
+  }).catch(() => {});
+}
 
 function observePosts() {
-  if (!_postObserver) return;
-  document.querySelectorAll('.post-card[id^="pc-"]').forEach(el => {
-    _postObserver.observe(el);
-  });
+  // Send views for posts visible right now
+  setTimeout(_sendVisiblePostViews, 800);
+  // Also send on scroll (debounced)
+  const feed = document.getElementById('feed');
+  if (feed && !feed._viewBound) {
+    feed._viewBound = true;
+    window.addEventListener('scroll', () => {
+      clearTimeout(_viewTimer);
+      _viewTimer = setTimeout(_sendVisiblePostViews, 600);
+    }, { passive: true });
+  }
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
@@ -960,7 +962,7 @@ function initSocket() {
     div.innerHTML = renderPost(p);
     const newCard = div.firstElementChild;
     feed.insertBefore(newCard, feed.firstChild);
-    if (_postObserver) _postObserver.observe(newCard);
+    setTimeout(_sendVisiblePostViews, 500);
     // Refresh right sidebar trending with slight delay (let server cache update)
     setTimeout(() => { if (curPage === 'home') renderRightSidebar(); }, 1500);
   });
@@ -1645,26 +1647,7 @@ function renderFeed(ps) {
   const el = document.getElementById('feed'); if (!el) return;
   if (!ps.length) { el.innerHTML = ''; return; }
   el.innerHTML = ps.map(renderPost).join('');
-  setTimeout(observePosts, 100); // observe newly rendered posts
-  // Fallback: after 2s, send any posts that are currently in DOM as viewed
-  setTimeout(() => {
-    const pids = [...document.querySelectorAll('.post-card[data-pid]')]
-      .filter(el => {
-        const r = el.getBoundingClientRect();
-        return r.top < window.innerHeight && r.bottom > 0; // currently visible
-      })
-      .map(el => parseInt(el.dataset.pid))
-      .filter(pid => pid && !_seenPosts.has(pid));
-    if (pids.length) {
-      pids.forEach(pid => _seenPosts.add(pid));
-      console.log('[impressions] sending batch:', pids);
-      fetch('/api/posts/viewed', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body: JSON.stringify({ post_ids: pids }) })
-        .then(r => r.json()).then(d => console.log('[impressions] result:', d))
-        .catch(e => console.error('[impressions] fetch error:', e));
-    } else {
-      console.log('[impressions] no new visible posts (seen:', _seenPosts.size, ')');
-    }
-  }, 2000);
+  observePosts(); // track which posts are visible
 }
 function renderPost(p) {
   const mine = p.is_mine || p.author_id === me?.id;
