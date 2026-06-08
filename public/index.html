@@ -588,12 +588,20 @@ mark{background:var(--indigo-light);color:var(--primary);border-radius:3px;paddi
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+// ── EMERGENCY SPLASH KILL — first thing registered, fires regardless of anything below
+setTimeout(function(){var l=document.getElementById('nxload');if(l){l.style.opacity='0';setTimeout(function(){if(l.parentNode)l.parentNode.removeChild(l);},350);}},5000);
 // ── STATE ──────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('nxtoken') || '';
 
 // ── SOUND ENGINE — pleasant bell/chime via Web Audio API ────────────────
-const _ac = typeof AudioContext !== 'undefined' ? new AudioContext() : (typeof webkitAudioContext !== 'undefined' ? new webkitAudioContext() : null);
+let _ac = null;
+function _getAC() {
+  if (_ac) return _ac;
+  try { _ac = typeof AudioContext !== 'undefined' ? new AudioContext() : (typeof webkitAudioContext !== 'undefined' ? new webkitAudioContext() : null); } catch(e) { _ac = null; }
+  return _ac;
+}
 function _bell(freq, vol, t0) {
+  const _ac = _getAC();
   if (!_ac) return;
   try {
     const o = _ac.createOscillator(), g = _ac.createGain();
@@ -607,6 +615,7 @@ function _bell(freq, vol, t0) {
 }
 // Message sound — soft two-note chime (C5 then E5)
 function playMsgSound() {
+  const _ac = _getAC();
   if (!_ac) return;
   if (_ac.state === 'suspended') _ac.resume();
   const t = _ac.currentTime;
@@ -615,6 +624,7 @@ function playMsgSound() {
 }
 // Notification sound — gentle three-note chime (E5, G5, C6)
 function playNotifSound() {
+  const _ac = _getAC();
   if (!_ac) return;
   if (_ac.state === 'suspended') _ac.resume();
   const t = _ac.currentTime;
@@ -624,7 +634,7 @@ function playNotifSound() {
 }
 // Unlock AudioContext on first interaction
 ['click','touchend','keydown'].forEach(ev =>
-  document.addEventListener(ev, () => { if (_ac?.state === 'suspended') _ac.resume(); }, { once: true, passive: true })
+  document.addEventListener(ev, () => { const ac = _getAC(); if (ac?.state === 'suspended') ac.resume(); }, { once: true, passive: true })
 );
 let me = null, socket = null, postsData = [], curPage = 'home';
 
@@ -3168,7 +3178,7 @@ function switchJobTab(tab) {
           <div style="display:flex;align-items:center;gap:8px">${a.poster_avatar?`<img src="${a.poster_avatar}" class="av av40" style="object-fit:cover;border-radius:50%">`:av({name:a.poster_name},'av40')}</div>
         </div>
       </div>`).join('') :
-      '<div class="card empty"><i class="fas fa-file-circle-xmark" style="font-size:40px"></i><p>You haven't applied to any jobs yet</p><button class="btn btn-p btn-sm" style="margin-top:12px" onclick="switchJobTab('browse')">Browse Jobs</button></div>';
+      `<div class="card empty"><i class="fas fa-file-circle-xmark" style="font-size:40px"></i><p>You haven't applied to any jobs yet</p><button class="btn btn-p btn-sm" style="margin-top:12px" onclick="switchJobTab('browse')">Browse Jobs</button></div>`;
   }
 }
 function rJobList(d) {
@@ -3235,7 +3245,7 @@ async function saveJob() {
 setTimeout(() => {
   const l = document.getElementById('nxload');
   if (l) { l.style.opacity = '0'; setTimeout(() => l.remove(), 350); }
-}, 8000);
+}, 5000);
 
 (async () => {
   if (localStorage.getItem('nxdark') === '1') document.body.classList.add('dark');
