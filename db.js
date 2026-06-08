@@ -319,6 +319,7 @@ const migrations = [
   `ALTER TABLE interview_sessions ADD COLUMN slot_key TEXT DEFAULT ''`,
   `ALTER TABLE interview_sessions ADD COLUMN mentor_session_id INTEGER DEFAULT NULL`,
   `ALTER TABLE posts ADD COLUMN welcome_for_user_id INTEGER DEFAULT NULL`,
+  `ALTER TABLE users ADD COLUMN nx_template TEXT DEFAULT NULL`,
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 

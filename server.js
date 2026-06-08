@@ -16,7 +16,7 @@ const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, { cors: { origin: process.env.APP_URL || '*', methods: ['GET','POST'] } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'nexus_dev_secret_change_in_prod';
 const PORT = process.env.PORT || 3000;
@@ -338,7 +338,7 @@ app.get('/api/search', auth, (req, res) => {
 // ─── USERS ───────────────────────────────────────────────────────────────────
 
 app.get('/api/users/me', auth, (req, res) => {
-  const user = db.prepare(`SELECT id, name, email, headline, location, about, avatar_url, banner_url, current_position, connections_count, is_dark_mode, created_at FROM users WHERE id = ?`).get(req.user.id);
+  const user = db.prepare(`SELECT id, name, email, headline, location, about, avatar_url, banner_url, current_position, connections_count, is_dark_mode, nx_template, created_at FROM users WHERE id = ?`).get(req.user.id);
   const experiences = db.prepare(`SELECT * FROM experiences WHERE user_id = ? ORDER BY is_current DESC, start_date DESC`).all(req.user.id);
   const education = db.prepare(`SELECT * FROM education WHERE user_id = ?`).all(req.user.id);
   const skills = db.prepare(`SELECT name FROM user_skills WHERE user_id = ?`).all(req.user.id).map(s => s.name);
@@ -355,8 +355,9 @@ app.put('/api/users/me', auth, (req, res) => {
   const is_dark_mode = rawBody.is_dark_mode;
   // Only update fields that were explicitly provided (non-empty strings)
   const noe = v => (v === '' || v == null) ? null : v;
-  db.prepare(`UPDATE users SET name=COALESCE(?,name), headline=COALESCE(?,headline), location=COALESCE(?,location), about=COALESCE(?,about), current_position=COALESCE(?,current_position), is_dark_mode=COALESCE(?,is_dark_mode) WHERE id=?`)
-    .run(noe(name), noe(headline), noe(location), noe(about), noe(current_position), is_dark_mode ?? null, req.user.id);
+  const nx_template = rawBody.nx_template !== undefined ? (rawBody.nx_template || null) : undefined;
+  db.prepare(`UPDATE users SET name=COALESCE(?,name), headline=COALESCE(?,headline), location=COALESCE(?,location), about=COALESCE(?,about), current_position=COALESCE(?,current_position), is_dark_mode=COALESCE(?,is_dark_mode), nx_template=COALESCE(?,nx_template) WHERE id=?`)
+    .run(noe(name), noe(headline), noe(location), noe(about), noe(current_position), is_dark_mode ?? null, nx_template ?? null, req.user.id);
   res.json({ ok: true });
 });
 
@@ -692,12 +693,16 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
 });
 
 app.get('/api/posts/:id/comments', auth, (req, res) => {
+  const limit = 30;
+  const before = req.query.before ? parseInt(req.query.before) : null;
+  const whereClause = before ? 'WHERE c.post_id=? AND c.id < ?' : 'WHERE c.post_id=?';
+  const params = before ? [req.params.id, before] : [req.params.id];
   const comments = db.prepare(`
     SELECT c.*, u.name as author_name, u.avatar_url as author_avatar
     FROM comments c JOIN users u ON c.author_id=u.id
-    WHERE c.post_id=? ORDER BY c.created_at ASC
-  `).all(req.params.id);
-  res.json(comments);
+    ${whereClause} ORDER BY c.created_at DESC LIMIT ${limit}
+  `).all(...params).reverse(); // reverse so UI shows oldest-first
+  res.json({ comments, has_more: comments.length === limit });
 });
 
 app.post('/api/posts/:id/poll/:optionId/vote', auth, (req, res) => {
@@ -796,7 +801,16 @@ app.put('/api/connections/:id', auth, (req, res) => {
 });
 
 app.delete('/api/connections/:id', auth, (req, res) => {
+  // Check if a real accepted connection exists before decrementing
+  const existing = db.prepare(
+    `SELECT requester_id, addressee_id, status FROM connections
+     WHERE (requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?)`
+  ).get(req.user.id, req.params.id, req.params.id, req.user.id);
   db.prepare(`DELETE FROM connections WHERE (requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?)`).run(req.user.id, req.params.id, req.params.id, req.user.id);
+  // Only decrement if connection was accepted (not just pending)
+  if (existing?.status === 'accepted') {
+    db.prepare(`UPDATE users SET connections_count=MAX(0,connections_count-1) WHERE id=? OR id=?`).run(req.user.id, parseInt(req.params.id));
+  }
   res.json({ ok: true });
 });
 
@@ -827,17 +841,25 @@ app.get('/api/messages/threads', auth, (req, res) => {
 app.get('/api/messages/:userId', auth, (req, res) => {
   const otherId = req.params.userId;
   db.prepare(`UPDATE messages SET is_read=1 WHERE sender_id=? AND receiver_id=?`).run(otherId, req.user.id);
+  const PAGE_SIZE = 50;
+  const before = req.query.before ? parseInt(req.query.before) : null;
+  const beforeClause = before ? 'AND m.id < ?' : '';
+  const params = before
+    ? [req.user.id, otherId, otherId, req.user.id, before]
+    : [req.user.id, otherId, otherId, req.user.id];
   const msgs = db.prepare(`
     SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar
     FROM messages m JOIN users u ON m.sender_id=u.id
-    WHERE (m.sender_id=? AND m.receiver_id=?) OR (m.sender_id=? AND m.receiver_id=?)
-    ORDER BY m.created_at ASC LIMIT 100
-  `).all(req.user.id, otherId, otherId, req.user.id);
-  res.json(msgs);
+    WHERE ((m.sender_id=? AND m.receiver_id=?) OR (m.sender_id=? AND m.receiver_id=?))
+    ${beforeClause}
+    ORDER BY m.created_at DESC LIMIT ${PAGE_SIZE}
+  `).all(...params).reverse();
+  res.json({ messages: msgs, has_more: msgs.length === PAGE_SIZE });
 });
 
 app.post('/api/messages/:userId', auth, (req, res) => {
-  const { content } = req.body;
+  const content = sanitize(req.body.content, 2000);
+  if (!content) return res.status(400).json({ error: 'Message cannot be empty' });
   const receiverId = req.params.userId;
   const info = db.prepare(`INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)`).run(req.user.id, receiverId, content);
   const sender = db.prepare(`SELECT name, avatar_url FROM users WHERE id=?`).get(req.user.id);
@@ -921,8 +943,13 @@ app.get('/api/salary/stats', auth, (req, res) => {
 
 app.post('/api/salary', auth, (req, res) => {
   const { company, role, salary_lpa, experience_years, city, tech_stack, is_anonymous } = req.body;
+  const salNum = parseFloat(salary_lpa);
+  if (!company || !role || !salary_lpa || isNaN(salNum) || salNum <= 0 || salNum > 10000) {
+    return res.status(400).json({ error: 'Valid company, role, and salary (0–10000 LPA) are required' });
+  }
+  const expNum = Math.max(0, parseInt(experience_years) || 0);
   db.prepare(`INSERT INTO salary_entries (user_id, company, role, salary_lpa, experience_years, city, tech_stack, is_anonymous) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(req.user.id, company, role, salary_lpa, experience_years || 0, city || '', tech_stack || '', is_anonymous !== false ? 1 : 0);
+    .run(req.user.id, company.trim(), role.trim(), salNum, expNum, (city||'').trim(), (tech_stack||'').trim(), is_anonymous !== false ? 1 : 0);
   res.json({ ok: true });
 });
 
@@ -1417,6 +1444,20 @@ app.post('/api/jobs/:id/apply', auth, (req, res) => {
   } catch { res.status(400).json({ error: 'Already applied' }); }
 });
 
+app.get('/api/jobs/my-applications', auth, (req, res) => {
+  const apps = db.prepare(`
+    SELECT ja.id as application_id, ja.cover_letter, ja.created_at as applied_at,
+      j.id as job_id, j.title, j.company, j.location, j.job_type, j.status as job_status,
+      u.name as poster_name, u.avatar_url as poster_avatar
+    FROM job_applications ja
+    JOIN jobs j ON ja.job_id = j.id
+    JOIN users u ON j.poster_id = u.id
+    WHERE ja.applicant_id = ?
+    ORDER BY ja.created_at DESC
+  `).all(req.user.id);
+  res.json(apps);
+});
+
 app.patch('/api/jobs/:id', auth, (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
@@ -1437,15 +1478,7 @@ app.delete('/api/jobs/:id', auth, (req, res) => {
 
 
 
-app.post('/api/auth/reset-by-email', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password || password.length < 6) return res.status(400).json({ error: 'Email and password (min 6 chars) required' });
-  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email);
-  if (!user) return res.status(400).json({ error: 'No account found with that email' });
-  const hash = await bcrypt.hash(password, 10);
-  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
-  res.json({ ok: true });
-});
+// reset-by-email removed — was insecure (no verification). Use token-based /api/auth/forgot-password instead.
 
 // ── FORGOT PASSWORD (token-based, legacy) ─────────────────────────────────────
 app.post('/api/auth/forgot-password', async (req, res) => {
