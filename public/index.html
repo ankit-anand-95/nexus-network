@@ -3217,7 +3217,6 @@ function showApply(id, title) {
 async function applyJob(id) { const r = await api('/api/jobs/' + id + '/apply', { method: 'POST', body: JSON.stringify({ cover_letter: document.getElementById('cltxt').value }) }); if (r.error) { toast('Error: ' + r.error); return; } apiInvalidate('/api/jobs'); closeModal(); toast('Applied! 🎉'); renderJobs(); }
 function showPostJob() {
   showModal(`<h2 style="margin-bottom:16px">Post a Job</h2>
-    <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Enargin-bottom:16px">Post a Job</h2>
     <div class="frow"><div class="fg"><label>Job Title *</label><input id="pjti" placeholder="Senior Engineer"></div><div class="fg"><label>Company *</label><input id="pjco" placeholder="Company name"></div></div>
     <div class="frow"><div class="fg"><label>Location</label><input id="pjlo" placeholder="City or Remote"></div><div class="fg"><label>Type</label><select id="pjty"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
     <div class="fg"><label>Salary Range</label><input id="pjsa" placeholder="12-18 LPA"></div>
