@@ -796,6 +796,8 @@ function setTemplate(t) {
   localStorage.setItem('nx-template', t || '');
   if (_darkTemplates.has(t)) document.body.classList.add('dark');
   else if (t) document.body.classList.remove('dark');
+  // Persist to server so template syncs across devices
+  if (token) api('/api/users/me', { method: 'PUT', body: JSON.stringify({ nx_template: t || '' }) }).catch(() => {});
   closeModal(); closeMe();
   toast(((_TMPL_META[t||'']||{}).label || 'Default') + ' theme applied');
 }
@@ -1337,6 +1339,17 @@ async function doAuth(m) {
   const r = await api('/api/auth/' + m, { method: 'POST', body: JSON.stringify(body) });
   if (r.error) { el.innerHTML = `<div class="err">${r.error}</div>`; return; }
   token = r.token; me = r.user; localStorage.setItem('nxtoken', token);
+  // Restore template from server (cross-device sync) — takes priority over localStorage
+  if (me?.nx_template !== undefined && me.nx_template !== null) {
+    const srv = me.nx_template || '';
+    localStorage.setItem('nx-template', srv);
+    document.body.classList.remove(..._templates);
+    if (srv && _templates.includes(srv)) {
+      document.body.classList.add(srv);
+      if (_darkTemplates.has(srv)) document.body.classList.add('dark');
+      else document.body.classList.remove('dark');
+    }
+  }
   document.getElementById('awrap').style.display = 'none';
   document.getElementById('appw').style.display = 'flex';
   clearInterval(window._badgeTimer);
@@ -2258,6 +2271,34 @@ function filterThreads(q) {
 }
 
 function filterMsgConns() { const q = document.getElementById('msrch')?.value.toLowerCase(); document.querySelectorAll('.mconn-row').forEach(r => { r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
+async function loadOlderMsgs() {
+  if (!achat || !window._chatOldestId) return;
+  const btn = document.getElementById('load-older-wrap');
+  if (btn) btn.innerHTML = '<span style="font-size:12px;color:var(--sub)"><i class="fas fa-spinner fa-spin"></i> Loading…</span>';
+  const resp = await api('/api/messages/' + achat + '?before=' + window._chatOldestId);
+  const older = Array.isArray(resp) ? resp : (resp?.messages || []);
+  const hasMore = resp?.has_more || false;
+  if (!older.length) { if (btn) btn.remove(); return; }
+  window._chatOldestId = older[0].id;
+  const mb = document.getElementById('cmsgs');
+  if (!mb) return;
+  const prevScrollH = mb.scrollHeight;
+  const newHtml = older.map(m => {
+    const isMine = m.sender_id == me.id;
+    return `<div class="bub ${isMine?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot">${isMine?`<button class="edit-msg-btn" onclick="editMsg(${m.id},this)" title="Edit"><i class="fas fa-pen"></i></button>`:''}${m.is_edited?'<span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span>':''}<time>${timeAgo(m.created_at)}</time>${isMine?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`;
+  }).join('');
+  // Insert after load-older-wrap (or at top if wrap removed)
+  if (hasMore) {
+    if (btn) btn.innerHTML = '<button class="btn btn-o btn-sm" onclick="loadOlderMsgs()" style="font-size:12px"><i class="fas fa-clock-rotate-left"></i> Load older messages</button>';
+  } else {
+    if (btn) btn.remove();
+  }
+  const anchor = document.getElementById('load-older-wrap');
+  if (anchor) anchor.insertAdjacentHTML('afterend', newHtml);
+  else mb.insertAdjacentHTML('afterbegin', newHtml);
+  // Keep scroll position stable
+  mb.scrollTop = mb.scrollHeight - prevScrollH;
+}
 async function openChat(uid, name) {
   achat = uid;
   clearInterval(window._chatPollTimer); // clear any old poll
@@ -2269,10 +2310,13 @@ async function openChat(uid, name) {
   const mlay = document.getElementById('mlay');
   if (mlay) mlay.classList.add('chat-open');
   document.body.classList.add('in-chat');
-  const [info, msgs] = await Promise.all([
+  const [info, msgResp] = await Promise.all([
     api('/api/users/' + uid).catch(() => ({ name: name || 'User' })),
     api('/api/messages/' + uid)
   ]);
+  const msgs = Array.isArray(msgResp) ? msgResp : (msgResp?.messages || []);
+  const hasMsgMore = msgResp?.has_more || false;
+  window._chatOldestId = msgs.length ? msgs[0].id : null;
   const col = document.getElementById('ccol'); if (!col) return;
   const isOnline = window._online?.has(String(uid));
   const hl = info.headline || '';
@@ -2283,7 +2327,7 @@ async function openChat(uid, name) {
       <div><h3>${escHtml(info.name||name)}</h3><p id="ctop-sub" data-hl="${escHtml(hl)}">${isOnline?'Active now':hl}</p></div>
       <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="go('profile',${uid})">Profile</button>
     </div>
-    <div id="cmsgs">${(Array.isArray(msgs)?msgs:[]).map(m=>{
+    <div id="cmsgs">${hasMsgMore ? `<div id="load-older-wrap" style="text-align:center;padding:8px"><button class="btn btn-o btn-sm" onclick="loadOlderMsgs()" style="font-size:12px"><i class="fas fa-clock-rotate-left"></i> Load older messages</button></div>` : ''}${(Array.isArray(msgs)?msgs:[]).map(m=>{
       const isMine = m.sender_id==me.id;
       return `<div class="bub ${isMine?'mine':'theirs'}" data-mid="${m.id}">${escHtml(m.content)}<div class="bub-foot">${isMine?`<button class="edit-msg-btn" onclick="editMsg(${m.id},this)" title="Edit"><i class="fas fa-pen"></i></button>`:''}${m.is_edited?'<span class="edited-label" style="font-size:10px;opacity:.5;margin-right:4px">edited</span>':''}<time>${timeAgo(m.created_at)}</time>${isMine?`<span class="tick ${m.is_read?'read':'sent'}"><i class="fas fa-check${m.is_read?'-double':''}"></i></span>`:''}</div></div>`;
     }).join('')}</div>
@@ -3079,12 +3123,53 @@ function _spAdd(iso) {
 function _spRemove(key) { window._exSlots=window._exSlots.filter(s=>s.key!==key); _renderSlotModal(); }
 
 // ── JOBS ──────────────────────────────────────────────────────────────────
-async function renderJobs() {
-  const j = await api('/api/jobs');
-  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto"><div class="phdr"><h1>💼 Jobs</h1><button class="btn btn-p" onclick="showPostJob()"><i class="fas fa-plus"></i> Post Job</button></div>
-    <div class="card cb" style="margin-bottom:16px"><div class="frow2"><input id="jq" placeholder="Search jobs, companies…" oninput="filJobs()"><select id="jt" onchange="filJobs()"><option value="">All types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div>
-    <div id="jlist">${rJobList(Array.isArray(j) ? j : [])}</div>`;
+async function renderJobs(tab) {
+  const [j, myApps] = await Promise.all([api('/api/jobs'), api('/api/jobs/my-applications')]);
+  const activeTab = tab || 'browse';
   window._jd = Array.isArray(j) ? j : [];
+  window._myApps = Array.isArray(myApps) ? myApps : [];
+  document.getElementById('pr').innerHTML = `<div style="max-width:860px;margin:0 auto">
+    <div class="phdr"><h1>💼 Jobs</h1><button class="btn btn-p" onclick="showPostJob()"><i class="fas fa-plus"></i> Post Job</button></div>
+    <div class="tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:0">
+      <button id="jtab-browse" onclick="switchJobTab('browse')" class="tab-btn${activeTab==='browse'?' active':''}" style="padding:8px 18px;background:none;border:none;cursor:pointer;font-weight:600;font-size:14px;color:${activeTab==='browse'?'var(--primary)':'var(--sub)'};border-bottom:${activeTab==='browse'?'2px solid var(--primary)':'2px solid transparent'};margin-bottom:-2px">Browse Jobs</button>
+      <button id="jtab-mine" onclick="switchJobTab('mine')" class="tab-btn${activeTab==='mine'?' active':''}" style="padding:8px 18px;background:none;border:none;cursor:pointer;font-weight:600;font-size:14px;color:${activeTab==='mine'?'var(--primary)':'var(--sub)'};border-bottom:${activeTab==='mine'?'2px solid var(--primary)':'2px solid transparent'};margin-bottom:-2px">My Applications ${window._myApps.length>0?`<span style="background:var(--primary);color:#fff;border-radius:10px;font-size:11px;padding:1px 7px;margin-left:4px">${window._myApps.length}</span>`:''}</button>
+    </div>
+    <div id="jobs-tab-content"></div>`;
+  switchJobTab(activeTab);
+}
+function switchJobTab(tab) {
+  const content = document.getElementById('jobs-tab-content');
+  if (!content) return;
+  // Update tab styles
+  ['browse','mine'].forEach(t => {
+    const btn = document.getElementById('jtab-' + t);
+    if (btn) {
+      btn.style.color = t === tab ? 'var(--primary)' : 'var(--sub)';
+      btn.style.borderBottom = t === tab ? '2px solid var(--primary)' : '2px solid transparent';
+    }
+  });
+  if (tab === 'browse') {
+    content.innerHTML = `<div class="card cb" style="margin-bottom:16px"><div class="frow2"><input id="jq" placeholder="Search jobs, companies…" oninput="filJobs()"><select id="jt" onchange="filJobs()"><option value="">All types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select></div></div><div id="jlist">${rJobList(window._jd)}</div>`;
+  } else {
+    const apps = window._myApps || [];
+    content.innerHTML = apps.length ? apps.map(a => `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div>
+            <h3 style="font-size:15px;font-weight:700;margin:0 0 2px">${escHtml(a.title)}</h3>
+            <p style="color:var(--sub);font-size:13px;margin:0 0 6px">${escHtml(a.company)}${a.location ? ' · ' + escHtml(a.location) : ''}</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="font-size:11px;background:var(--inp);color:var(--sub);padding:2px 8px;border-radius:20px"><i class="fas fa-clock"></i> ${escHtml(a.job_type)}</span>
+              <span style="font-size:11px;background:${a.job_status==='open'?'#d1fae5':'#fef2f2'};color:${a.job_status==='open'?'#065f46':'#991b1b'};padding:2px 8px;border-radius:20px">${a.job_status==='open'?'🟢 Active':'🔴 Closed'}</span>
+              <span style="font-size:11px;color:var(--sub)"><i class="fas fa-calendar"></i> Applied ${timeAgo(a.applied_at)}</span>
+            </div>
+            ${a.cover_letter ? `<p style="font-size:12px;color:var(--sub);margin:8px 0 0;font-style:italic">"${escHtml(a.cover_letter.slice(0,120))}${a.cover_letter.length>120?'…':''}"</p>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">${a.poster_avatar?`<img src="${a.poster_avatar}" class="av av40" style="object-fit:cover;border-radius:50%">`:av({name:a.poster_name},'av40')}</div>
+        </div>
+      </div>`).join('') :
+      '<div class="card empty"><i class="fas fa-file-circle-xmark" style="font-size:40px"></i><p>You haven't applied to any jobs yet</p><button class="btn btn-p btn-sm" style="margin-top:12px" onclick="switchJobTab('browse')">Browse Jobs</button></div>';
+  }
 }
 function rJobList(d) {
   if (!d.length) return '<div class="card empty"><i class="fas fa-briefcase" style="font-size:40px"></i><p>No jobs found</p></div>';
